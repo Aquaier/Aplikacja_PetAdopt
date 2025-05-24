@@ -4,6 +4,7 @@ CREATE TABLE uzytkownicy (
     haslo_hash VARCHAR(255) NOT NULL,
     imie VARCHAR(100),
     czy_schronisko BOOLEAN NOT NULL,
+    rola ENUM('admin', 'uzytkownik') DEFAULT 'uzytkownik',
     utworzono DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

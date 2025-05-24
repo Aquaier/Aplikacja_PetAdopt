@@ -38,14 +38,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
         automaticallyImplyLeading: true,
         title: const Text(
           'Edytuj profil',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
         ),
-        iconTheme: IconThemeData(
-          color: isDark ? Colors.white : Colors.black,
-        ),
+        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -58,10 +53,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   Expanded(
                     child: TextField(
                       controller: _firstNameController,
-                      style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                      style: TextStyle(
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
                       decoration: InputDecoration(
                         labelText: 'Imię',
-                        labelStyle: TextStyle(color: isDark ? Colors.white70 : null),
+                        labelStyle: TextStyle(
+                          color: isDark ? Colors.white70 : null,
+                        ),
                         border: const OutlineInputBorder(),
                       ),
                     ),
@@ -70,10 +69,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   Expanded(
                     child: TextField(
                       controller: _lastNameController,
-                      style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                      style: TextStyle(
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
                       decoration: InputDecoration(
                         labelText: 'Nazwisko',
-                        labelStyle: TextStyle(color: isDark ? Colors.white70 : null),
+                        labelStyle: TextStyle(
+                          color: isDark ? Colors.white70 : null,
+                        ),
                         border: const OutlineInputBorder(),
                       ),
                     ),
@@ -133,7 +136,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Color(0xFF42A5F5),
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   child: const Text(
                     'Zapisz zmiany',
