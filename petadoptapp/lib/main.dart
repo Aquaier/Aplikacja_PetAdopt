@@ -133,7 +133,7 @@ class _LoginPageState extends State<LoginPage> {
     });
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.104:5000/login'),
+        Uri.parse('http://192.168.0.103:5000/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email, 'password': password}),
       );
@@ -142,7 +142,6 @@ class _LoginPageState extends State<LoginPage> {
         _isLoading = false;
       });
       if (response.statusCode == 200 && data['success'] == true) {
-        // Sprawdź, czy user istnieje i czy backend zwrócił dane użytkownika
         if (data['user'] != null && data['user']['email'] == email) {
           Navigator.of(context).pushReplacementNamed('/home');
         } else {
@@ -189,7 +188,7 @@ class _LoginPageState extends State<LoginPage> {
     });
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.104:5000/register'),
+        Uri.parse('http://192.168.0.103:5000/register'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email, 'password': password}),
       );
@@ -238,7 +237,7 @@ class _LoginPageState extends State<LoginPage> {
     }
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.104:5000/forgot-password'),
+        Uri.parse('http://192.168.0.103:5000/forgot-password'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email}),
       );

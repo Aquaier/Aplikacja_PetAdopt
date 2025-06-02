@@ -27,7 +27,6 @@ class _HomePageState extends State<HomePage> {
   Offset? _dragStart;
   Offset _dragPosition = Offset.zero;
   double _angle = 0;
-  bool _isDragging = false;
   Size _screenSize = Size.zero;
   List<Map<String, dynamic>> _animals = [];
 
@@ -36,14 +35,14 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _screenSize = MediaQuery.of(context).size;
-      _fetchAnimalsAndPrecacheImages(context);
+      _fetchAnimals(context);
     });
   }
 
-  Future<void> _fetchAnimalsAndPrecacheImages(BuildContext context) async {
+  Future<void> _fetchAnimals(BuildContext context) async {
     try {
       final response = await http.get(
-        Uri.parse('http://192.168.0.104:5000/animals'),
+        Uri.parse('http://192.168.0.103:5000/animals'),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -54,16 +53,6 @@ class _HomePageState extends State<HomePage> {
           setState(() {
             _animals = animals;
           });
-          // Precache all images
-          for (final animal in animals) {
-            final url = animal['zdjecie_url'];
-            if (url != null && url.toString().isNotEmpty) {
-              // cached_network_image: prefetch
-              CachedNetworkImageProvider(
-                url,
-              ).resolve(const ImageConfiguration());
-            }
-          }
         } else {
           setState(() {
             _animals = [];
@@ -90,7 +79,6 @@ class _HomePageState extends State<HomePage> {
 
   void _onPanStart(DragStartDetails details) {
     _dragStart = details.globalPosition;
-    _isDragging = true;
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
@@ -114,15 +102,16 @@ class _HomePageState extends State<HomePage> {
     if (isDraggedFarEnough) {
       final isSwipedRight = dragVector.dx > 0;
 
-      if (isSwipedRight && _favorites.isNotEmpty) {
-        _favorites.add(_favorites[0]);
-      }
-
       setState(() {
-        if (_favorites.isNotEmpty) {
-          final first = _favorites.removeAt(0);
-          _favorites.add(first);
+        if (isSwipedRight) {
+          final swipedAnimal = _animals.removeAt(0);
+          _favorites.add(swipedAnimal['tytul']);
+        } else {
+          _animals.removeAt(0);
         }
+
+        // Trigger UI update
+        _animals = List.from(_animals);
       });
     }
 
@@ -130,8 +119,273 @@ class _HomePageState extends State<HomePage> {
       _dragPosition = Offset.zero;
       _dragStart = null;
       _angle = 0;
-      _isDragging = false;
     });
+  }
+
+  void _showAnimalDetails(Map<String, dynamic> animal) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.7,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (context, scrollController) {
+            return SingleChildScrollView(
+              controller: scrollController,
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child:
+                          animal['zdjecie_url'] != null &&
+                                  animal['zdjecie_url'].toString().isNotEmpty
+                              ? CachedNetworkImage(
+                                imageUrl: animal['zdjecie_url'],
+                                fit: BoxFit.cover,
+                                height: 220,
+                                width: double.infinity,
+                                placeholder:
+                                    (context, url) => Center(
+                                      child: CircularProgressIndicator(),
+                                    ),
+                                errorWidget:
+                                    (context, url, error) => Center(
+                                      child: Icon(
+                                        Icons.broken_image,
+                                        size: 100,
+                                        color: Colors.grey[400],
+                                      ),
+                                    ),
+                              )
+                              : Container(
+                                height: 220,
+                                color: Colors.grey[200],
+                                child: Center(
+                                  child: Icon(
+                                    Icons.pets,
+                                    size: 100,
+                                    color: Colors.grey[400],
+                                  ),
+                                ),
+                              ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      animal['tytul'] ?? '',
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (animal['wiek'] != null)
+                      Text(
+                        'Wiek: ${animal['wiek']}',
+                        style: const TextStyle(fontSize: 18),
+                      ),
+                    if (animal['waga'] != null)
+                      Text(
+                        'Waga: ${animal['waga']}',
+                        style: const TextStyle(fontSize: 18),
+                      ),
+                    const SizedBox(height: 16),
+                    if (animal['opis'] != null)
+                      Text(
+                        animal['opis'],
+                        style: const TextStyle(fontSize: 16),
+                        textAlign: TextAlign.center,
+                      ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () {},
+                          icon: const Icon(Icons.message, color: Colors.white),
+                          label: const Text(
+                            'Napisz',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Color(0xFFFF4081),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () {},
+                          icon: const Icon(
+                            Icons.phone,
+                            color: Color(0xFFFF4081),
+                          ),
+                          label: const Text(
+                            'Zadzwoń',
+                            style: TextStyle(color: Color(0xFFFF4081)),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFFFF4081)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.share,
+                            color: Color(0xFFFF4081),
+                          ),
+                          onPressed: () {},
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildAnimalCard(Map<String, dynamic> animal, {bool isTop = false}) {
+    if (isTop) {
+      return GestureDetector(
+        onPanStart: _onPanStart,
+        onPanUpdate: _onPanUpdate,
+        onPanEnd: _onPanEnd,
+        child: AnimatedBuilder(
+          animation: Listenable.merge([_pageController]),
+          builder: (context, child) {
+            return Transform(
+              transform:
+                  Matrix4.identity()
+                    ..translate(_dragPosition.dx, _dragPosition.dy)
+                    ..rotateZ(_angle),
+              child: child,
+            );
+          },
+          child: _animalCardContent(animal),
+        ),
+      );
+    } else {
+      return _animalCardContent(animal);
+    }
+  }
+
+  Widget _animalCardContent(Map<String, dynamic> animal) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+      elevation: 8,
+      margin: EdgeInsets.all(24),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(32),
+        child: Stack(
+          children: [
+            if (animal['zdjecie_url'] != null &&
+                animal['zdjecie_url'].toString().isNotEmpty)
+              Positioned.fill(
+                child: Builder(
+                  builder: (context) {
+                    return CachedNetworkImage(
+                      imageUrl: animal['zdjecie_url'],
+                      fit: BoxFit.cover,
+                      placeholder:
+                          (context, url) =>
+                              Center(child: CircularProgressIndicator()),
+                      errorWidget:
+                          (context, url, error) => Center(
+                            child: Icon(
+                              Icons.broken_image,
+                              size: 100,
+                              color: Colors.grey[400],
+                            ),
+                          ),
+                    );
+                  },
+                ),
+              )
+            else
+              Positioned.fill(
+                child: Container(
+                  color: Colors.grey[200],
+                  child: Center(
+                    child: Icon(Icons.pets, size: 100, color: Colors.grey[400]),
+                  ),
+                ),
+              ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.5),
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(32),
+                    bottomRight: Radius.circular(32),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            animal['tytul'] ?? '',
+                            style: const TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.info_outline,
+                            color: Colors.white,
+                          ),
+                          onPressed: () {
+                            _showAnimalDetails(animal);
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      animal['opis'] ?? '',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -183,137 +437,25 @@ class _HomePageState extends State<HomePage> {
               Expanded(
                 child:
                     _animals.isEmpty
-                        ? Center(child: CircularProgressIndicator())
-                        : PageView.builder(
-                          controller: _pageController,
-                          itemCount: _animals.length,
-                          itemBuilder: (context, index) {
-                            final animal = _animals[index];
-                            return GestureDetector(
-                              onPanStart: _onPanStart,
-                              onPanUpdate: _onPanUpdate,
-                              onPanEnd: _onPanEnd,
-                              child: Transform(
-                                transform:
-                                    Matrix4.identity()
-                                      ..translate(
-                                        _dragPosition.dx,
-                                        _dragPosition.dy,
-                                      )
-                                      ..rotateZ(_angle),
-                                child: Card(
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(32),
-                                  ),
-                                  elevation: 8,
-                                  margin: EdgeInsets.all(24),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(32),
-                                    child: Stack(
-                                      children: [
-                                        if (animal['zdjecie_url'] != null &&
-                                            animal['zdjecie_url']
-                                                .toString()
-                                                .isNotEmpty)
-                                          Positioned.fill(
-                                            child: Builder(
-                                              builder: (context) {
-                                                print(
-                                                  'Animal image URL: ${animal['zdjecie_url']}',
-                                                ); // Debugowanie
-                                                return CachedNetworkImage(
-                                                  imageUrl:
-                                                      animal['zdjecie_url'],
-                                                  fit: BoxFit.cover,
-                                                  placeholder:
-                                                      (context, url) => Center(
-                                                        child:
-                                                            CircularProgressIndicator(),
-                                                      ),
-                                                  errorWidget:
-                                                      (
-                                                        context,
-                                                        url,
-                                                        error,
-                                                      ) => Center(
-                                                        child: Icon(
-                                                          Icons.broken_image,
-                                                          size: 100,
-                                                          color:
-                                                              Colors.grey[400],
-                                                        ),
-                                                      ),
-                                                );
-                                              },
-                                            ),
-                                          )
-                                        else
-                                          Positioned.fill(
-                                            child: Container(
-                                              color: Colors.grey[200],
-                                              child: Center(
-                                                child: Icon(
-                                                  Icons.pets,
-                                                  size: 100,
-                                                  color: Colors.grey[400],
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        Positioned(
-                                          left: 0,
-                                          right: 0,
-                                          bottom: 0,
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 16,
-                                              vertical: 16,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: Colors.black.withOpacity(
-                                                0.5,
-                                              ),
-                                              borderRadius:
-                                                  const BorderRadius.only(
-                                                    bottomLeft: Radius.circular(
-                                                      32,
-                                                    ),
-                                                    bottomRight:
-                                                        Radius.circular(32),
-                                                  ),
-                                            ),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Text(
-                                                  animal['tytul'] ?? '',
-                                                  style: const TextStyle(
-                                                    fontSize: 28,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Colors.white,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  animal['opis'] ?? '',
-                                                  style: const TextStyle(
-                                                    fontSize: 16,
-                                                    color: Colors.white70,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
+                        ? Center(
+                          child: Text(
+                            'Brak zwierząt do przeglądania',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color:
+                                  widget.darkMode
+                                      ? Colors.white70
+                                      : Colors.black54,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                        : Stack(
+                          children: [
+                            for (int i = _animals.length - 1; i >= 0; i--)
+                              _buildAnimalCard(_animals[i], isTop: i == 0),
+                          ],
                         ),
               ),
             ],

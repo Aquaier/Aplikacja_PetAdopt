@@ -178,7 +178,7 @@ def get_animals():
     for animal in animals:
         if animal['zdjecie_url']:
             filename = os.path.basename(animal['zdjecie_url'])
-            animal['zdjecie_url'] = f'http://192.168.0.104:5000/images/{filename}'
+            animal['zdjecie_url'] = f'http://192.168.0.103:5000/images/{filename}'
     return jsonify({'success': True, 'animals': animals})
 
 @app.route('/images/<filename>')
