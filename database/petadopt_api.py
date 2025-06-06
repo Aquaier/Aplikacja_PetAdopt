@@ -178,8 +178,46 @@ def get_animals():
     for animal in animals:
         if animal['zdjecie_url']:
             filename = os.path.basename(animal['zdjecie_url'])
-            animal['zdjecie_url'] = f'http://192.168.0.103:5000/images/{filename}'
+            animal['zdjecie_url'] = f'http://192.168.0.109:5000/images/{filename}'
     return jsonify({'success': True, 'animals': animals})
+
+@app.route('/animals', methods=['POST'])
+def add_animal():
+    tytul = request.form.get('tytul')
+    gatunek = request.form.get('gatunek')
+    rasa = request.form.get('rasa')
+    wiek = request.form.get('wiek')
+    waga = request.form.get('waga')
+    opis = request.form.get('opis')
+    owner_email = request.form.get('owner_email')
+    imie = request.form.get('imie')
+    image = request.files.get('zdjecie')
+    zdjecie_url = None
+    if image:
+        images_dir = os.path.join(os.path.dirname(__file__), 'images')
+        if not os.path.exists(images_dir):
+            os.makedirs(images_dir)
+        filename = f"{random.randint(100000,999999)}_{image.filename}"
+        filepath = os.path.join(images_dir, filename)
+        image.save(filepath)
+        zdjecie_url = f"http://192.168.0.109:5000/images/{filename}"
+    # Pobierz uzytkownik_id na podstawie emaila
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute('SELECT id FROM uzytkownicy WHERE email=%s', (owner_email,))
+    user = cursor.fetchone()
+    if not user:
+        cursor.close()
+        return jsonify({'success': False, 'message': 'Nie znaleziono użytkownika o podanym emailu.'}), 400
+    uzytkownik_id = user['id']
+    cursor.close()
+    # Wstaw zwierzaka (bez owner_email!)
+    cursor = conn.cursor()
+    cursor.execute('''INSERT INTO zwierzeta (uzytkownik_id, tytul, gatunek, rasa, wiek, waga, opis, zdjecie_url, imie)
+                      VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)''',
+                   (uzytkownik_id, tytul, gatunek, rasa, wiek, waga, opis, zdjecie_url, imie))
+    conn.commit()
+    cursor.close()
+    return jsonify({'success': True, 'message': 'Zwierzak dodany!'})
 
 @app.route('/images/<filename>')
 def serve_image(filename):

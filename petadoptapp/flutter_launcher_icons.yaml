@@ -1,0 +1,6 @@
+# Configuration for flutter_launcher_icons
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "../logoPetAdopt.jpg"
+  remove_alpha_ios: true

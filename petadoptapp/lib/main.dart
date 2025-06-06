@@ -18,6 +18,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   bool darkMode = false;
+  String? _loggedInEmail;
 
   void setDarkMode(bool value) {
     setState(() {
@@ -64,12 +65,27 @@ class _MyAppState extends State<MyApp> {
         ),
       ),
       themeMode: darkMode ? ThemeMode.dark : ThemeMode.light,
-      home: LoginPage(setDarkMode: setDarkMode, darkMode: darkMode),
+      home: LoginPage(
+        setDarkMode: setDarkMode,
+        darkMode: darkMode,
+        onLogin: (email) {
+          setState(() {
+            _loggedInEmail = email;
+          });
+        },
+      ),
       debugShowCheckedModeBanner: false,
       routes: {
         '/home':
-            (context) => HomePage(setDarkMode: setDarkMode, darkMode: darkMode),
-        '/messages': (context) => const MessagesPage(),
+            (context) => HomePage(
+              setDarkMode: setDarkMode,
+              darkMode: darkMode,
+              currentUserEmail: _loggedInEmail,
+            ),
+        '/messages': (context) {
+          // Always get latest _loggedInEmail from app state
+          return MessagesPage(currentUserEmail: _loggedInEmail);
+        },
         '/favorites': (context) => const FavoritesPage(favorites: []),
       },
     );
@@ -79,7 +95,13 @@ class _MyAppState extends State<MyApp> {
 class LoginPage extends StatefulWidget {
   final void Function(bool)? setDarkMode;
   final bool darkMode;
-  const LoginPage({super.key, this.setDarkMode, this.darkMode = false});
+  final void Function(String email)? onLogin;
+  const LoginPage({
+    super.key,
+    this.setDarkMode,
+    this.darkMode = false,
+    this.onLogin,
+  });
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -97,6 +119,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _isLoading = false;
   String? _emailError;
   String? _passwordError;
+  int _selectedTab = 0;
 
   @override
   void dispose() {
@@ -133,7 +156,7 @@ class _LoginPageState extends State<LoginPage> {
     });
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.103:5000/login'),
+        Uri.parse('http://192.168.0.109:5000/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email, 'password': password}),
       );
@@ -143,6 +166,7 @@ class _LoginPageState extends State<LoginPage> {
       });
       if (response.statusCode == 200 && data['success'] == true) {
         if (data['user'] != null && data['user']['email'] == email) {
+          if (widget.onLogin != null) widget.onLogin!(email);
           Navigator.of(context).pushReplacementNamed('/home');
         } else {
           setState(() {
@@ -188,7 +212,7 @@ class _LoginPageState extends State<LoginPage> {
     });
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.103:5000/register'),
+        Uri.parse('http://192.168.0.109:5000/register'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email, 'password': password}),
       );
@@ -237,7 +261,7 @@ class _LoginPageState extends State<LoginPage> {
     }
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.103:5000/forgot-password'),
+        Uri.parse('http://192.168.0.109:5000/forgot-password'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email}),
       );
@@ -263,8 +287,6 @@ class _LoginPageState extends State<LoginPage> {
       });
     }
   }
-
-  int _selectedTab = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -441,7 +463,15 @@ class _LoginPageState extends State<LoginPage> {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: _isLoading ? null : _login,
+            onPressed:
+                _isLoading
+                    ? null
+                    : () async {
+                      FocusScope.of(
+                        context,
+                      ).unfocus(); // Ukryj klawiaturę przed logowaniem
+                      await _login();
+                    },
             style: ElevatedButton.styleFrom(
               backgroundColor: Color(0xFF42A5F5),
               padding: const EdgeInsets.symmetric(vertical: 16),

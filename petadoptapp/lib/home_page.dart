@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'settings_page.dart';
 import 'messages_page.dart';
 import 'favorites_page.dart';
+import 'add_animal_page.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:math';
@@ -10,7 +11,13 @@ import 'package:cached_network_image/cached_network_image.dart';
 class HomePage extends StatefulWidget {
   final void Function(bool)? setDarkMode;
   final bool darkMode;
-  const HomePage({super.key, this.setDarkMode, this.darkMode = false});
+  final String? currentUserEmail;
+  const HomePage({
+    super.key,
+    this.setDarkMode,
+    this.darkMode = false,
+    this.currentUserEmail,
+  });
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -42,31 +49,42 @@ class _HomePageState extends State<HomePage> {
   Future<void> _fetchAnimals(BuildContext context) async {
     try {
       final response = await http.get(
-        Uri.parse('http://192.168.0.103:5000/animals'),
+        Uri.parse('http://192.168.0.109:5000/animals'),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true && data['animals'] != null) {
           final animals = List<Map<String, dynamic>>.from(data['animals']);
-          print('Animals fetched: $animals'); // Debugowanie
           animals.shuffle(Random());
           setState(() {
             _animals = animals;
+            // Reset przesuwania po wczytaniu nowych zwierząt lub filtrów
+            _dragPosition = Offset.zero;
+            _dragStart = null;
+            _angle = 0;
           });
         } else {
           setState(() {
             _animals = [];
+            _dragPosition = Offset.zero;
+            _dragStart = null;
+            _angle = 0;
           });
         }
       } else {
         setState(() {
           _animals = [];
+          _dragPosition = Offset.zero;
+          _dragStart = null;
+          _angle = 0;
         });
       }
     } catch (e) {
-      print('Error fetching animals: $e'); // Debugowanie
       setState(() {
         _animals = [];
+        _dragPosition = Offset.zero;
+        _dragStart = null;
+        _angle = 0;
       });
     }
   }
@@ -90,14 +108,15 @@ class _HomePageState extends State<HomePage> {
       newPosition.dy - _dragStart!.dy,
     );
 
-    // Oblicz kąt na podstawie pozycji X
-    final angle = _dragPosition.dx / _screenSize.width * 0.5;
+    // Zmniejsz czułość kąta, aby przesuwanie było bardziej naturalne
+    final angle = _dragPosition.dx / (_screenSize.width * 1.2) * 0.5;
     setState(() => _angle = angle);
   }
 
   void _onPanEnd(DragEndDetails details) {
     final dragVector = _dragPosition;
-    final isDraggedFarEnough = dragVector.dx.abs() > _screenSize.width * 0.4;
+    // Zmniejsz próg przesunięcia, aby swipe był bardziej responsywny
+    final isDraggedFarEnough = dragVector.dx.abs() > _screenSize.width * 0.25;
 
     if (isDraggedFarEnough) {
       final isSwipedRight = dragVector.dx > 0;
@@ -107,7 +126,8 @@ class _HomePageState extends State<HomePage> {
           final swipedAnimal = _animals.removeAt(0);
           _favorites.add(swipedAnimal['tytul']);
         } else {
-          _animals.removeAt(0);
+          final rejectedAnimal = _animals.removeAt(0);
+          _animals.add(rejectedAnimal);
         }
 
         // Trigger UI update
@@ -184,24 +204,34 @@ class _HomePageState extends State<HomePage> {
                       style: const TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
+                        color: Colors.black, // czarny tytuł
                       ),
                     ),
                     const SizedBox(height: 8),
                     if (animal['wiek'] != null)
                       Text(
                         'Wiek: ${animal['wiek']}',
-                        style: const TextStyle(fontSize: 18),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          color: Colors.black,
+                        ), // czarny
                       ),
                     if (animal['waga'] != null)
                       Text(
                         'Waga: ${animal['waga']}',
-                        style: const TextStyle(fontSize: 18),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          color: Colors.black,
+                        ), // czarny
                       ),
                     const SizedBox(height: 16),
                     if (animal['opis'] != null)
                       Text(
                         animal['opis'],
-                        style: const TextStyle(fontSize: 16),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.black,
+                        ), // czarny
                         textAlign: TextAlign.center,
                       ),
                     const SizedBox(height: 24),
@@ -209,31 +239,55 @@ class _HomePageState extends State<HomePage> {
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         ElevatedButton.icon(
-                          onPressed: () {},
+                          onPressed: () {
+                            // Przekieruj do MessagesPage z ownerem ogłoszenia
+                            if (animal['owner_email'] != null &&
+                                animal['owner_email'] != '') {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder:
+                                      (context) => MessagesPage(
+                                        currentUserEmail:
+                                            widget.currentUserEmail,
+                                        chatWithEmail: animal['owner_email'],
+                                      ),
+                                ),
+                              );
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Brak adresu e-mail właściciela ogłoszenia.',
+                                  ),
+                                ),
+                              );
+                            }
+                          },
                           icon: const Icon(Icons.message, color: Colors.white),
                           label: const Text(
                             'Napisz',
-                            style: TextStyle(color: Colors.white),
+                            style: TextStyle(
+                              color: Colors.white,
+                            ), // biały tekst
                           ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Color(0xFFFF4081),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
+                            backgroundColor: Color(0xFF42A5F5), // niebieski
                           ),
                         ),
                         OutlinedButton.icon(
                           onPressed: () {},
                           icon: const Icon(
                             Icons.phone,
-                            color: Color(0xFFFF4081),
+                            color: Color(0xFF42A5F5), // niebieski
                           ),
                           label: const Text(
                             'Zadzwoń',
-                            style: TextStyle(color: Color(0xFFFF4081)),
+                            style: TextStyle(color: Color(0xFF42A5F5)),
                           ),
                           style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Color(0xFFFF4081)),
+                            side: const BorderSide(
+                              color: Color(0xFF42A5F5),
+                            ), // niebieski
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
@@ -242,7 +296,7 @@ class _HomePageState extends State<HomePage> {
                         IconButton(
                           icon: const Icon(
                             Icons.share,
-                            color: Color(0xFFFF4081),
+                            color: Color(0xFF42A5F5), // niebieski
                           ),
                           onPressed: () {},
                         ),
@@ -388,6 +442,36 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  List<Map<String, dynamic>> _filteredAnimals() {
+    return _animals.where((animal) {
+      // Typ zwierzęcia
+      if (_filterType != null && _filterType != 'Oba') {
+        final typ = (animal['gatunek'] ?? '').toString().toLowerCase();
+        if ((_filterType == 'Pies' && typ != 'pies') ||
+            (_filterType == 'Kot' && typ != 'kot')) {
+          return false;
+        }
+      }
+      // Rasa
+      if (_filterBreed != null && _filterBreed!.trim().isNotEmpty) {
+        final breed = (animal['rasa'] ?? '').toString().toLowerCase();
+        if (!breed.contains(_filterBreed!.trim().toLowerCase())) {
+          return false;
+        }
+      }
+      // Wiek
+      if (_filterAgeRange != null) {
+        final wiek = int.tryParse((animal['wiek'] ?? '').toString());
+        if (wiek == null ||
+            wiek < _filterAgeRange!.start ||
+            wiek > _filterAgeRange!.end) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -397,46 +481,10 @@ class _HomePageState extends State<HomePage> {
           Column(
             children: [
               const SizedBox(height: 32),
-              // Górny pasek z napisem i przyciskiem ustawień
-              Row(
-                children: [
-                  const SizedBox(width: 32),
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'PetAdopt',
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: widget.darkMode ? Colors.white : Colors.black,
-                        ),
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.settings,
-                      color: widget.darkMode ? Colors.white : Colors.black,
-                    ),
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder:
-                              (context) => SettingsPage(
-                                setDarkMode: widget.setDarkMode,
-                                darkMode: widget.darkMode,
-                              ),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
               const SizedBox(height: 16),
               Expanded(
                 child:
-                    _animals.isEmpty
+                    _filteredAnimals().isEmpty
                         ? Center(
                           child: Text(
                             'Brak zwierząt do przeglądania',
@@ -453,8 +501,15 @@ class _HomePageState extends State<HomePage> {
                         )
                         : Stack(
                           children: [
-                            for (int i = _animals.length - 1; i >= 0; i--)
-                              _buildAnimalCard(_animals[i], isTop: i == 0),
+                            for (
+                              int i = _filteredAnimals().length - 1;
+                              i >= 0;
+                              i--
+                            )
+                              _buildAnimalCard(
+                                _filteredAnimals()[i],
+                                isTop: i == 0,
+                              ),
                           ],
                         ),
               ),
@@ -592,6 +647,10 @@ class _HomePageState extends State<HomePage> {
                                   _filterType = selectedType;
                                   _filterBreed = breed;
                                   _filterAgeRange = ageRange;
+                                  // Reset przesuwania po zmianie filtrów
+                                  _dragPosition = Offset.zero;
+                                  _dragStart = null;
+                                  _angle = 0;
                                 });
                                 Navigator.of(context).pop();
                               },
@@ -608,6 +667,61 @@ class _HomePageState extends State<HomePage> {
                 );
               },
             ),
+          ),
+          Stack(
+            children: [
+              // Pasek górny bez napisu/logo
+              SizedBox(height: 56),
+              Align(
+                alignment: Alignment.topRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 8, right: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          Icons.settings,
+                          color: widget.darkMode ? Colors.white : Colors.black,
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder:
+                                  (context) => SettingsPage(
+                                    setDarkMode: widget.setDarkMode,
+                                    darkMode: widget.darkMode,
+                                  ),
+                            ),
+                          );
+                        },
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          Icons.add_circle_outline,
+                          color: widget.darkMode ? Colors.white : Colors.black,
+                          size: 30,
+                        ),
+                        tooltip: 'Dodaj zwierzaka',
+                        onPressed: () async {
+                          final result = await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder:
+                                  (context) => AddAnimalPage(
+                                    currentUserEmail: widget.currentUserEmail,
+                                  ),
+                            ),
+                          );
+                          if (result == true) {
+                            _fetchAnimals(context);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
