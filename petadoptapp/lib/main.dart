@@ -4,6 +4,7 @@ import 'messages_page.dart';
 import 'favorites_page.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'dart:io';
 
 void main() {
   runApp(const MyApp());
@@ -156,7 +157,7 @@ class _LoginPageState extends State<LoginPage> {
     });
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.109:5000/login'),
+        Uri.parse(getApiBaseUrl() + '/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email, 'password': password}),
       );
@@ -212,7 +213,7 @@ class _LoginPageState extends State<LoginPage> {
     });
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.109:5000/register'),
+        Uri.parse(getApiBaseUrl() + '/register'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email, 'password': password}),
       );
@@ -261,7 +262,7 @@ class _LoginPageState extends State<LoginPage> {
     }
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.109:5000/forgot-password'),
+        Uri.parse(getApiBaseUrl() + '/forgot-password'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email}),
       );
@@ -607,5 +608,18 @@ class _LoginPageState extends State<LoginPage> {
         const SizedBox(height: 16),
       ],
     );
+  }
+}
+
+String getApiBaseUrl() {
+  if (Platform.isAndroid) {
+    // Android emulator uses 10.0.2.2 to access host machine
+    return 'http://10.0.2.2:5000';
+  } else if (Platform.isIOS) {
+    // iOS simulator uses localhost
+    return 'http://localhost:5000';
+  } else {
+    // Fallback for desktop/web
+    return 'http://localhost:5000';
   }
 }

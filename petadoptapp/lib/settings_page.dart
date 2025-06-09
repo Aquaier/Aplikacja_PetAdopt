@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'messages_page.dart';
 import 'favorites_page.dart';
-import 'edit_profile_page.dart';
+import 'my_listings_page.dart';
 
 class SettingsPage extends StatefulWidget {
   final void Function(bool)? setDarkMode;
   final bool darkMode;
-  const SettingsPage({super.key, this.setDarkMode, this.darkMode = false});
+  final String? currentUserEmail;
+  const SettingsPage({
+    super.key,
+    this.setDarkMode,
+    this.darkMode = false,
+    this.currentUserEmail,
+  });
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -47,7 +53,14 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           Padding(
             padding: const EdgeInsets.only(left: 24, top: 16, bottom: 8),
-            child: Text('KONTO', style: TextStyle(color: darkMode ? Colors.white70 : Colors.black45, fontWeight: FontWeight.bold, letterSpacing: 1)),
+            child: Text(
+              'KONTO',
+              style: TextStyle(
+                color: darkMode ? Colors.white70 : Colors.black45,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1,
+              ),
+            ),
           ),
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -58,8 +71,16 @@ class _SettingsPageState extends State<SettingsPage> {
             child: Column(
               children: [
                 ListTile(
-                  leading: Icon(Icons.notifications_none, color: darkMode ? Colors.white70 : Colors.black54),
-                  title: Text('Powiadomienia', style: TextStyle(color: darkMode ? Colors.white : Colors.black)),
+                  leading: Icon(
+                    Icons.notifications_none,
+                    color: darkMode ? Colors.white70 : Colors.black54,
+                  ),
+                  title: Text(
+                    'Powiadomienia',
+                    style: TextStyle(
+                      color: darkMode ? Colors.white : Colors.black,
+                    ),
+                  ),
                   trailing: Switch(
                     value: notificationsEnabled,
                     activeColor: Color(0xFF42A5F5),
@@ -68,8 +89,16 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const Divider(height: 0),
                 ListTile(
-                  leading: Icon(Icons.dark_mode, color: darkMode ? Colors.white70 : Colors.black54),
-                  title: Text('Tryb ciemny', style: TextStyle(color: darkMode ? Colors.white : Colors.black)),
+                  leading: Icon(
+                    Icons.dark_mode,
+                    color: darkMode ? Colors.white70 : Colors.black54,
+                  ),
+                  title: Text(
+                    'Tryb ciemny',
+                    style: TextStyle(
+                      color: darkMode ? Colors.white : Colors.black,
+                    ),
+                  ),
                   trailing: Switch(
                     value: darkMode,
                     activeColor: Color(0xFF42A5F5),
@@ -81,12 +110,28 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const Divider(height: 0),
                 ListTile(
-                  leading: Icon(Icons.person_outline, color: darkMode ? Colors.white70 : Colors.black54),
-                  title: Text('Edytuj profil', style: TextStyle(color: darkMode ? Colors.white : Colors.black)),
-                  trailing: Icon(Icons.chevron_right, color: darkMode ? Colors.white38 : Colors.black38),
+                  leading: Icon(
+                    Icons.list_alt,
+                    color: darkMode ? Colors.white70 : Colors.black54,
+                  ),
+                  title: Text(
+                    'Moje ogłoszenia',
+                    style: TextStyle(
+                      color: darkMode ? Colors.white : Colors.black,
+                    ),
+                  ),
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    color: darkMode ? Colors.white38 : Colors.black38,
+                  ),
                   onTap: () {
                     Navigator.of(context).push(
-                      MaterialPageRoute(builder: (context) => const EditProfilePage()),
+                      MaterialPageRoute(
+                        builder:
+                            (context) => MyListingsPage(
+                              currentUserEmail: widget.currentUserEmail,
+                            ),
+                      ),
                     );
                   },
                 ),
@@ -99,17 +144,32 @@ class _SettingsPageState extends State<SettingsPage> {
               children: [
                 TextButton(
                   onPressed: () {
-                    Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                    Navigator.of(
+                      context,
+                    ).pushNamedAndRemoveUntil('/', (route) => false);
                   },
                   style: TextButton.styleFrom(
                     foregroundColor: Color(0xFF42A5F5),
-                    textStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: darkMode ? Colors.white : Colors.black),
+                    textStyle: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: darkMode ? Colors.white : Colors.black,
+                    ),
                   ),
-                  child: Text('Wyloguj', style: TextStyle(color: Color(0xFF42A5F5))),
+                  child: Text(
+                    'Wyloguj',
+                    style: TextStyle(color: Color(0xFF42A5F5)),
+                  ),
                 ),
                 TextButton(
                   onPressed: () {},
-                  child: Text('Usuń konto', style: TextStyle(color: darkMode ? Colors.white70 : Colors.black54, decoration: TextDecoration.underline)),
+                  child: Text(
+                    'Usuń konto',
+                    style: TextStyle(
+                      color: darkMode ? Colors.white70 : Colors.black54,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -140,10 +200,16 @@ class _SettingsPageState extends State<SettingsPage> {
                 },
               ),
               IconButton(
-                icon: Icon(Icons.chat_bubble_outline, color: darkMode ? Colors.white70 : Colors.grey, size: 32),
+                icon: Icon(
+                  Icons.chat_bubble_outline,
+                  color: darkMode ? Colors.white70 : Colors.grey,
+                  size: 32,
+                ),
                 onPressed: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (context) => const MessagesPage()),
+                    MaterialPageRoute(
+                      builder: (context) => const MessagesPage(),
+                    ),
                   );
                 },
               ),
@@ -152,7 +218,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 onPressed: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (context) => FavoritesPage(favorites: const []), // Placeholder, bo lista polubionych jest w HomePage
+                      builder:
+                          (context) => FavoritesPage(
+                            favorites: const [],
+                          ), // Placeholder, bo lista polubionych jest w HomePage
                     ),
                   );
                 },

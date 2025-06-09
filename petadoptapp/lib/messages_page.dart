@@ -1,189 +1,263 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'main.dart' show getApiBaseUrl;
+
+class Message {
+  final String sender;
+  final String text;
+  final DateTime timestamp;
+
+  Message({required this.sender, required this.text, required this.timestamp});
+
+  factory Message.fromJson(Map<String, dynamic> json) {
+    final czas = json['czas_wyslania'] ?? json['timestamp'] ?? '';
+    DateTime parsedTime;
+    try {
+      parsedTime = DateFormat(
+        'EEE, dd MMM yyyy HH:mm:ss',
+        'en_US',
+      ).parseUtc(czas.replaceAll(' GMT', ''));
+    } catch (_) {
+      parsedTime = DateTime.now();
+    }
+    return Message(
+      sender: json['sender_email'] ?? json['sender'],
+      text: json['tresc'] ?? json['text'],
+      timestamp: parsedTime,
+    );
+  }
+}
 
 class MessagesPage extends StatefulWidget {
   final String? currentUserEmail;
-  final String? chatWithEmail; // If provided, open chat with this user
-  const MessagesPage({super.key, this.currentUserEmail, this.chatWithEmail});
+  final String? chatWithEmail;
+  final int? animalId;
+  const MessagesPage({
+    Key? key,
+    this.currentUserEmail,
+    this.chatWithEmail,
+    this.animalId,
+  }) : super(key: key);
 
   @override
   State<MessagesPage> createState() => _MessagesPageState();
 }
 
 class _MessagesPageState extends State<MessagesPage> {
-  // Simulated message storage: { 'user1|user2': [ {from, to, text, time}, ... ] }
-  static final Map<String, List<Map<String, dynamic>>> _conversations = {};
-  String? _selectedUser;
-  final TextEditingController _messageController = TextEditingController();
-
-  List<String> get _allUsers {
-    // In real app, fetch from backend
-    final users = <String>{};
-    _conversations.forEach((key, msgs) {
-      final parts = key.split('|');
-      users.addAll(parts);
-    });
-    if (widget.currentUserEmail != null) users.remove(widget.currentUserEmail);
-    return users.toList();
-  }
-
-  String _chatKey(String user1, String user2) {
-    final sorted = [user1, user2]..sort();
-    return '${sorted[0]}|${sorted[1]}';
-  }
-
-  List<Map<String, dynamic>> get _messages {
-    if (widget.currentUserEmail == null || _selectedUser == null) return [];
-    return _conversations[_chatKey(widget.currentUserEmail!, _selectedUser!)] ?? [];
-  }
+  List<Message> _messages = [];
+  final TextEditingController _controller = TextEditingController();
+  bool _isLoading = false;
+  List<Map<String, dynamic>> _conversations = [];
 
   @override
   void initState() {
     super.initState();
     if (widget.chatWithEmail != null) {
-      _selectedUser = widget.chatWithEmail;
+      _fetchMessages();
+    } else {
+      _fetchConversations();
     }
   }
 
-  void _sendMessage() {
-    final text = _messageController.text.trim();
-    if (text.isEmpty || widget.currentUserEmail == null || _selectedUser == null) return;
-    final key = _chatKey(widget.currentUserEmail!, _selectedUser!);
-    _conversations.putIfAbsent(key, () => []);
-    _conversations[key]!.add({
-      'from': widget.currentUserEmail!,
-      'to': _selectedUser!,
-      'text': text,
-      'time': DateTime.now(),
-    });
-    _messageController.clear();
-    setState(() {});
+  Future<void> _fetchMessages() async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await http.get(
+        Uri.parse(
+          getApiBaseUrl() +
+              '/messages?user1=${Uri.encodeComponent(widget.currentUserEmail ?? '')}&user2=${Uri.encodeComponent(widget.chatWithEmail ?? '')}&animal_id=${widget.animalId ?? ''}',
+        ),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _messages =
+              (data['messages'] as List?)
+                  ?.map((m) => Message.fromJson(m))
+                  .toList() ??
+              [];
+        });
+      }
+    } catch (_) {}
+    setState(() => _isLoading = false);
+  }
+
+  Future<void> _fetchConversations() async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await http.get(
+        Uri.parse(
+          getApiBaseUrl() +
+              '/conversations?user=${Uri.encodeComponent(widget.currentUserEmail ?? '')}',
+        ),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _conversations =
+              (data['conversations'] as List?)?.cast<Map<String, dynamic>>() ??
+              [];
+        });
+      }
+    } catch (_) {}
+    setState(() => _isLoading = false);
+  }
+
+  Future<void> _sendMessage() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    setState(() => _isLoading = true);
+    try {
+      final response = await http.post(
+        Uri.parse(getApiBaseUrl() + '/messages'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'sender_email': widget.currentUserEmail,
+          'receiver_email': widget.chatWithEmail,
+          'animal_id': widget.animalId,
+          'tresc': text,
+        }),
+      );
+      if (response.statusCode == 200) {
+        _controller.clear();
+        _fetchMessages();
+      }
+    } catch (_) {}
+    setState(() => _isLoading = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
-      backgroundColor: isDark ? Colors.grey[900] : Colors.grey[100],
-      appBar: AppBar(
-        backgroundColor: isDark ? Colors.grey[900] : Colors.grey[100],
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        centerTitle: true,
-        title: const Text(
-          'Wiadomości',
-          style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-        ),
-        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
-        leading: widget.currentUserEmail != null && _selectedUser != null
-            ? IconButton(
-                icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : Colors.black),
-                onPressed: () => setState(() => _selectedUser = null),
-              )
-            : null,
-      ),
-      body: widget.currentUserEmail == null
-          ? Center(child: Text('Zaloguj się, aby korzystać z wiadomości'))
-          : _selectedUser == null
-              ? _buildUserList()
-              : _buildChat(),
-      bottomNavigationBar: BottomAppBar(
-        color: isDark ? Colors.grey[850] : Colors.white,
-        elevation: 0,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                icon: Icon(Icons.search, color: Color(0xFF42A5F5), size: 32),
-                onPressed: () {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                },
-              ),
-              IconButton(
-                icon: Icon(Icons.chat_bubble_outline, color: isDark ? Colors.white70 : Colors.grey, size: 32),
-                onPressed: () {},
-              ),
-              IconButton(
-                icon: Icon(Icons.favorite_border, color: Colors.red, size: 32),
-                onPressed: () {
-                  Navigator.of(context).pushNamed('/favorites');
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUserList() {
-    final users = _allUsers;
-    if (users.isEmpty) {
-      return Center(child: Text('Brak rozmów. Zacznij nową rozmowę!'));
+    if (widget.chatWithEmail == null) {
+      // Show conversation list (inbox)
+      return Scaffold(
+        appBar: AppBar(title: Text('Wiadomości')),
+        body:
+            _isLoading
+                ? Center(child: CircularProgressIndicator())
+                : ListView.builder(
+                  itemCount: _conversations.length,
+                  itemBuilder: (context, idx) {
+                    final conv = _conversations[idx];
+                    final otherUser = conv['other_user_email'] ?? '';
+                    final animalId = conv['animal_id'];
+                    final lastMsg = conv['last_message'] ?? '';
+                    return ListTile(
+                      leading: Icon(Icons.person),
+                      title: Text(otherUser),
+                      subtitle: Text(
+                        lastMsg,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder:
+                                (context) => MessagesPage(
+                                  currentUserEmail: widget.currentUserEmail,
+                                  chatWithEmail: otherUser,
+                                  animalId: animalId,
+                                ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+      );
     }
-    return ListView.builder(
-      itemCount: users.length,
-      itemBuilder: (context, idx) {
-        final user = users[idx];
-        return ListTile(
-          title: Text(user),
-          onTap: () => setState(() => _selectedUser = user),
-        );
-      },
-    );
-  }
-
-  Widget _buildChat() {
-    return Column(
-      children: [
-        Expanded(
-          child: ListView.builder(
-            reverse: true,
-            itemCount: _messages.length,
-            itemBuilder: (context, idx) {
-              final msg = _messages[_messages.length - 1 - idx];
-              final isMe = msg['from'] == widget.currentUserEmail;
-              return Align(
-                alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                child: Container(
-                  margin: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isMe ? Color(0xFF42A5F5) : Colors.grey[300],
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    msg['text'],
-                    style: TextStyle(color: isMe ? Colors.white : Colors.black),
+    // Show chat with selected user
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Czat z ${widget.chatWithEmail ?? ''}'),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child:
+                _isLoading
+                    ? Center(child: CircularProgressIndicator())
+                    : ListView.builder(
+                      reverse: true,
+                      itemCount: _messages.length,
+                      itemBuilder: (context, idx) {
+                        final msg = _messages[_messages.length - 1 - idx];
+                        final isMe = msg.sender == widget.currentUserEmail;
+                        return Align(
+                          alignment:
+                              isMe
+                                  ? Alignment.centerRight
+                                  : Alignment.centerLeft,
+                          child: Container(
+                            margin: EdgeInsets.symmetric(
+                              vertical: 4,
+                              horizontal: 8,
+                            ),
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color:
+                                  isMe ? Color(0xFF42A5F5) : Colors.grey[300],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  msg.text,
+                                  style: TextStyle(
+                                    color: isMe ? Colors.white : Colors.black,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  DateFormat(
+                                    'HH:mm, dd.MM.yyyy',
+                                  ).format(msg.timestamp.toLocal()),
+                                  style: TextStyle(
+                                    color:
+                                        isMe ? Colors.white70 : Colors.black54,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+          ),
+          Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    decoration: InputDecoration(
+                      hintText: 'Napisz wiadomość...',
+                      border: OutlineInputBorder(),
+                    ),
+                    onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
-              );
-            },
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _messageController,
-                  decoration: InputDecoration(
-                    hintText: 'Napisz wiadomość...',
-                    border: OutlineInputBorder(),
-                  ),
-                  onSubmitted: (_) => _sendMessage(),
+                IconButton(
+                  icon: Icon(Icons.send, color: Color(0xFF42A5F5)),
+                  onPressed: _isLoading ? null : _sendMessage,
                 ),
-              ),
-              IconButton(
-                icon: Icon(Icons.send, color: Color(0xFF42A5F5)),
-                onPressed: _sendMessage,
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

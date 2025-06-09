@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'settings_page.dart';
 import 'messages_page.dart';
 import 'favorites_page.dart';
@@ -7,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:math';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'main.dart' show getApiBaseUrl;
 
 class HomePage extends StatefulWidget {
   final void Function(bool)? setDarkMode;
@@ -29,6 +31,25 @@ class _HomePageState extends State<HomePage> {
   String? _filterType;
   String? _filterBreed;
   RangeValues? _filterAgeRange;
+  List<String> _filterWojewodztwa = [];
+  final List<String> _allWojewodztwa = [
+    'dolnośląskie',
+    'kujawsko-pomorskie',
+    'lubelskie',
+    'lubuskie',
+    'łódzkie',
+    'małopolskie',
+    'mazowieckie',
+    'opolskie',
+    'podkarpackie',
+    'podlaskie',
+    'pomorskie',
+    'śląskie',
+    'świętokrzyskie',
+    'warmińsko-mazurskie',
+    'wielkopolskie',
+    'zachodniopomorskie',
+  ];
 
   // Zmienne do obsługi gestów
   Offset? _dragStart;
@@ -36,6 +57,9 @@ class _HomePageState extends State<HomePage> {
   double _angle = 0;
   Size _screenSize = Size.zero;
   List<Map<String, dynamic>> _animals = [];
+
+  // For like/dislike overlay
+  String? _swipeDirection; // 'left' or 'right' or null
 
   @override
   void initState() {
@@ -48,9 +72,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _fetchAnimals(BuildContext context) async {
     try {
-      final response = await http.get(
-        Uri.parse('http://192.168.0.109:5000/animals'),
-      );
+      final response = await http.get(Uri.parse('${getApiBaseUrl()}/animals'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true && data['animals'] != null) {
@@ -110,7 +132,16 @@ class _HomePageState extends State<HomePage> {
 
     // Zmniejsz czułość kąta, aby przesuwanie było bardziej naturalne
     final angle = _dragPosition.dx / (_screenSize.width * 1.2) * 0.5;
-    setState(() => _angle = angle);
+    setState(() {
+      _angle = angle;
+      if (_dragPosition.dx > 0) {
+        _swipeDirection = 'right';
+      } else if (_dragPosition.dx < 0) {
+        _swipeDirection = 'left';
+      } else {
+        _swipeDirection = null;
+      }
+    });
   }
 
   void _onPanEnd(DragEndDetails details) {
@@ -139,10 +170,15 @@ class _HomePageState extends State<HomePage> {
       _dragPosition = Offset.zero;
       _dragStart = null;
       _angle = 0;
+      _swipeDirection = null;
     });
   }
 
-  void _showAnimalDetails(Map<String, dynamic> animal) {
+  void showAnimalDetails(
+    BuildContext context,
+    Map<String, dynamic> animal, {
+    String? currentUserEmail,
+  }) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -204,17 +240,26 @@ class _HomePageState extends State<HomePage> {
                       style: const TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
-                        color: Colors.black, // czarny tytuł
+                        color: Colors.black,
                       ),
                     ),
                     const SizedBox(height: 8),
+                    if (animal['rasa'] != null &&
+                        (animal['rasa'] as String).isNotEmpty)
+                      Text(
+                        'Rasa: ${animal['rasa']}',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          color: Colors.black,
+                        ),
+                      ),
                     if (animal['wiek'] != null)
                       Text(
                         'Wiek: ${animal['wiek']}',
                         style: const TextStyle(
                           fontSize: 18,
                           color: Colors.black,
-                        ), // czarny
+                        ),
                       ),
                     if (animal['waga'] != null)
                       Text(
@@ -222,7 +267,7 @@ class _HomePageState extends State<HomePage> {
                         style: const TextStyle(
                           fontSize: 18,
                           color: Colors.black,
-                        ), // czarny
+                        ),
                       ),
                     const SizedBox(height: 16),
                     if (animal['opis'] != null)
@@ -231,7 +276,7 @@ class _HomePageState extends State<HomePage> {
                         style: const TextStyle(
                           fontSize: 16,
                           color: Colors.black,
-                        ), // czarny
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     const SizedBox(height: 24),
@@ -240,16 +285,20 @@ class _HomePageState extends State<HomePage> {
                       children: [
                         ElevatedButton.icon(
                           onPressed: () {
-                            // Przekieruj do MessagesPage z ownerem ogłoszenia
                             if (animal['owner_email'] != null &&
                                 animal['owner_email'] != '') {
                               Navigator.of(context).push(
                                 MaterialPageRoute(
                                   builder:
                                       (context) => MessagesPage(
-                                        currentUserEmail:
-                                            widget.currentUserEmail,
+                                        currentUserEmail: currentUserEmail,
                                         chatWithEmail: animal['owner_email'],
+                                        animalId:
+                                            animal['id'] is int
+                                                ? animal['id']
+                                                : int.tryParse(
+                                                  animal['id'].toString(),
+                                                ),
                                       ),
                                 ),
                               );
@@ -266,28 +315,108 @@ class _HomePageState extends State<HomePage> {
                           icon: const Icon(Icons.message, color: Colors.white),
                           label: const Text(
                             'Napisz',
-                            style: TextStyle(
-                              color: Colors.white,
-                            ), // biały tekst
+                            style: TextStyle(color: Colors.white),
                           ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Color(0xFF42A5F5), // niebieski
+                            backgroundColor: Color(0xFF42A5F5),
                           ),
                         ),
                         OutlinedButton.icon(
-                          onPressed: () {},
+                          onPressed: () async {
+                            final ownerEmail =
+                                animal['owner_email'] ?? animal['email'] ?? '';
+                            if (ownerEmail.isNotEmpty) {
+                              final response = await http.get(
+                                Uri.parse(
+                                  '${getApiBaseUrl()}/user-phone?email=${Uri.encodeComponent(ownerEmail)}',
+                                ),
+                              );
+                              if (response.statusCode == 200) {
+                                final data = jsonDecode(response.body);
+                                final phone = data['phone'] ?? '';
+                                showDialog(
+                                  context: context,
+                                  builder:
+                                      (context) => AlertDialog(
+                                        title: const Text(
+                                          'Numer telefonu właściciela ogłoszenia',
+                                        ),
+                                        content: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              phone,
+                                              style: const TextStyle(
+                                                fontSize: 22,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 12),
+                                            ElevatedButton.icon(
+                                              onPressed: () async {
+                                                await Clipboard.setData(
+                                                  ClipboardData(text: phone),
+                                                );
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                      'Skopiowano numer telefonu do schowka!',
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                              icon: const Icon(Icons.copy),
+                                              label: const Text('Kopiuj numer'),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Color(
+                                                  0xFF42A5F5,
+                                                ),
+                                                foregroundColor: Colors.white,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed:
+                                                () =>
+                                                    Navigator.of(context).pop(),
+                                            child: const Text('Zamknij'),
+                                          ),
+                                        ],
+                                      ),
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Nie udało się pobrać numeru telefonu.',
+                                    ),
+                                  ),
+                                );
+                              }
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Brak adresu e-mail właściciela ogłoszenia.',
+                                  ),
+                                ),
+                              );
+                            }
+                          },
                           icon: const Icon(
                             Icons.phone,
-                            color: Color(0xFF42A5F5), // niebieski
+                            color: Color(0xFF42A5F5),
                           ),
                           label: const Text(
                             'Zadzwoń',
                             style: TextStyle(color: Color(0xFF42A5F5)),
                           ),
                           style: OutlinedButton.styleFrom(
-                            side: const BorderSide(
-                              color: Color(0xFF42A5F5),
-                            ), // niebieski
+                            side: const BorderSide(color: Color(0xFF42A5F5)),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
@@ -296,7 +425,7 @@ class _HomePageState extends State<HomePage> {
                         IconButton(
                           icon: const Icon(
                             Icons.share,
-                            color: Color(0xFF42A5F5), // niebieski
+                            color: Color(0xFF42A5F5),
                           ),
                           onPressed: () {},
                         ),
@@ -321,12 +450,86 @@ class _HomePageState extends State<HomePage> {
         child: AnimatedBuilder(
           animation: Listenable.merge([_pageController]),
           builder: (context, child) {
-            return Transform(
-              transform:
-                  Matrix4.identity()
-                    ..translate(_dragPosition.dx, _dragPosition.dy)
-                    ..rotateZ(_angle),
-              child: child,
+            return Stack(
+              children: [
+                Transform(
+                  transform:
+                      Matrix4.identity()
+                        ..translate(_dragPosition.dx, _dragPosition.dy)
+                        ..rotateZ(_angle),
+                  child: child,
+                ),
+                if (_swipeDirection == 'right')
+                  Positioned(
+                    top: 40,
+                    left: 30,
+                    child: Opacity(
+                      opacity: (_dragPosition.dx / (_screenSize.width * 0.25))
+                          .clamp(0.0, 1.0),
+                      child: Transform.rotate(
+                        angle: -0.4,
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.green, width: 5),
+                            borderRadius: BorderRadius.circular(12),
+                            color: Colors.transparent, // przezroczyste tło
+                          ),
+                          child: Text(
+                            'LIKE',
+                            style: TextStyle(
+                              color: Colors.green,
+                              fontSize: 48,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 4,
+                              shadows: [
+                                Shadow(blurRadius: 8, color: Colors.black26),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (_swipeDirection == 'left')
+                  Positioned(
+                    top: 40,
+                    right: 30,
+                    child: Opacity(
+                      opacity: (-_dragPosition.dx / (_screenSize.width * 0.25))
+                          .clamp(0.0, 1.0),
+                      child: Transform.rotate(
+                        angle: 0.4,
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.red, width: 5),
+                            borderRadius: BorderRadius.circular(12),
+                            color: Colors.transparent, // przezroczyste tło
+                          ),
+                          child: Text(
+                            'NOPE',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 48,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 4,
+                              shadows: [
+                                Shadow(blurRadius: 8, color: Colors.black26),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             );
           },
           child: _animalCardContent(animal),
@@ -419,7 +622,11 @@ class _HomePageState extends State<HomePage> {
                             color: Colors.white,
                           ),
                           onPressed: () {
-                            _showAnimalDetails(animal);
+                            showAnimalDetails(
+                              context,
+                              animal,
+                              currentUserEmail: widget.currentUserEmail,
+                            );
                           },
                         ),
                       ],
@@ -465,6 +672,13 @@ class _HomePageState extends State<HomePage> {
         if (wiek == null ||
             wiek < _filterAgeRange!.start ||
             wiek > _filterAgeRange!.end) {
+          return false;
+        }
+      }
+      // Województwo
+      if (_filterWojewodztwa.isNotEmpty) {
+        final woj = (animal['wojewodztwo'] ?? '').toString().toLowerCase();
+        if (!_filterWojewodztwa.contains(woj)) {
           return false;
         }
       }
@@ -626,6 +840,35 @@ class _HomePageState extends State<HomePage> {
                                     Text('Do: ${ageRange.end.round()} lat'),
                                   ],
                                 ),
+                                SizedBox(height: 16),
+                                Text(
+                                  'Województwo',
+                                  style: TextStyle(fontWeight: FontWeight.w500),
+                                ),
+                                Wrap(
+                                  spacing: 8,
+                                  children:
+                                      _allWojewodztwa
+                                          .map(
+                                            (woj) => FilterChip(
+                                              label: Text(woj),
+                                              selected: _filterWojewodztwa
+                                                  .contains(woj),
+                                              onSelected: (selected) {
+                                                setState(() {
+                                                  if (selected) {
+                                                    _filterWojewodztwa.add(woj);
+                                                  } else {
+                                                    _filterWojewodztwa.remove(
+                                                      woj,
+                                                    );
+                                                  }
+                                                });
+                                              },
+                                            ),
+                                          )
+                                          .toList(),
+                                ),
                               ],
                             ),
                           ),
@@ -639,19 +882,21 @@ class _HomePageState extends State<HomePage> {
                             ElevatedButton(
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Color(0xFF42A5F5),
-                                foregroundColor:
-                                    Colors.white, // zapewnia biały tekst
+                                foregroundColor: Colors.white,
                               ),
-                              onPressed: () {
+                              onPressed: () async {
                                 setState(() {
                                   _filterType = selectedType;
                                   _filterBreed = breed;
                                   _filterAgeRange = ageRange;
-                                  // Reset przesuwania po zmianie filtrów
+                                  // _filterWojewodztwa is already updated by FilterChips
                                   _dragPosition = Offset.zero;
                                   _dragStart = null;
                                   _angle = 0;
                                 });
+                                await _fetchAnimals(
+                                  context,
+                                ); // Pobierz ponownie zwierzęta z bazy po zmianie filtrów
                                 Navigator.of(context).pop();
                               },
                               child: Text(
@@ -691,6 +936,7 @@ class _HomePageState extends State<HomePage> {
                                   (context) => SettingsPage(
                                     setDarkMode: widget.setDarkMode,
                                     darkMode: widget.darkMode,
+                                    currentUserEmail: widget.currentUserEmail,
                                   ),
                             ),
                           );
@@ -757,7 +1003,21 @@ class _HomePageState extends State<HomePage> {
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder:
-                          (context) => FavoritesPage(favorites: _favorites),
+                          (context) => FavoritesPage(
+                            favorites: _favorites,
+                            allAnimals: _animals,
+                            onShowDetails:
+                                (
+                                  BuildContext ctx,
+                                  Map<String, dynamic> animal, {
+                                  String? currentUserEmail,
+                                }) => showAnimalDetails(
+                                  ctx,
+                                  animal,
+                                  currentUserEmail: widget.currentUserEmail,
+                                ),
+                            currentUserEmail: widget.currentUserEmail,
+                          ),
                     ),
                   );
                 },

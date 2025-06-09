@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'dart:async';
+import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
+import 'main.dart' show getApiBaseUrl;
 
 class AddAnimalPage extends StatefulWidget {
   final String? currentUserEmail;
@@ -32,7 +35,7 @@ class _AddAnimalPageState extends State<AddAnimalPage> {
     _formKey.currentState!.save();
     setState(() => _isLoading = true);
     try {
-      var uri = Uri.parse('http://192.168.1.172:5000/animals');
+      var uri = Uri.parse('${getApiBaseUrl()}/animals');
       var request = http.MultipartRequest('POST', uri);
       request.fields['tytul'] = _title ?? '';
       request.fields['gatunek'] = _species ?? '';
@@ -42,23 +45,46 @@ class _AddAnimalPageState extends State<AddAnimalPage> {
       request.fields['opis'] = _desc ?? '';
       request.fields['owner_email'] = widget.currentUserEmail ?? '';
       request.fields['imie'] = '';
-      request.files.add(await http.MultipartFile.fromPath('zdjecie', _imageFile!.path));
-      var response = await request.send();
-      if (response.statusCode == 200) {
-        // Sukces
+      request.files.add(
+        await http.MultipartFile.fromPath('zdjecie', _imageFile!.path),
+      );
+      var response = await request.send().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw TimeoutException('Przekroczono limit czasu połączenia.');
+        },
+      );
+
+      var responseBody = await response.stream.bytesToString();
+      var data = jsonDecode(responseBody);
+
+      if (response.statusCode == 200 && data['success'] == true) {
         setState(() => _isLoading = false);
         if (!mounted) return;
         Navigator.of(context).pop(true);
       } else {
         setState(() => _isLoading = false);
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Błąd dodawania zwierzaka!')),
+          SnackBar(
+            content: Text(data['message'] ?? 'Błąd dodawania zwierzaka!'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } catch (e) {
       setState(() => _isLoading = false);
+      if (!mounted) return;
+
+      String errorMessage = 'Błąd sieci';
+      if (e is TimeoutException) {
+        errorMessage = 'Przekroczono limit czasu połączenia';
+      } else {
+        errorMessage = e.toString();
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Błąd sieci: $e')),
+        SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
       );
     }
   }
@@ -80,24 +106,36 @@ class _AddAnimalPageState extends State<AddAnimalPage> {
             children: [
               GestureDetector(
                 onTap: _pickImage,
-                child: _imageFile == null
-                    ? Container(
-                        height: 180,
-                        color: Colors.grey[300],
-                        child: const Center(child: Icon(Icons.add_a_photo, size: 60)),
-                      )
-                    : Image.file(File(_imageFile!.path), height: 180, fit: BoxFit.cover),
+                child:
+                    _imageFile == null
+                        ? Container(
+                          height: 180,
+                          color: Colors.grey[300],
+                          child: const Center(
+                            child: Icon(Icons.add_a_photo, size: 60),
+                          ),
+                        )
+                        : Image.file(
+                          File(_imageFile!.path),
+                          height: 180,
+                          fit: BoxFit.cover,
+                        ),
               ),
               const SizedBox(height: 16),
               TextFormField(
-                decoration: const InputDecoration(labelText: 'Tytuł ogłoszenia'),
+                decoration: const InputDecoration(
+                  labelText: 'Tytuł ogłoszenia',
+                ),
                 validator: (v) => v == null || v.isEmpty ? 'Wpisz tytuł' : null,
                 onSaved: (v) => _title = v,
               ),
               const SizedBox(height: 12),
               TextFormField(
-                decoration: const InputDecoration(labelText: 'Gatunek (pies/kot)'),
-                validator: (v) => v == null || v.isEmpty ? 'Wpisz gatunek' : null,
+                decoration: const InputDecoration(
+                  labelText: 'Gatunek (pies/kot)',
+                ),
+                validator:
+                    (v) => v == null || v.isEmpty ? 'Wpisz gatunek' : null,
                 onSaved: (v) => _species = v,
               ),
               const SizedBox(height: 12),
@@ -128,9 +166,13 @@ class _AddAnimalPageState extends State<AddAnimalPage> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _submit,
-                  child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : Text('Dodaj', style: TextStyle(color: Colors.white, fontSize: 18)),
+                  child:
+                      _isLoading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : Text(
+                            'Dodaj',
+                            style: TextStyle(color: Colors.white, fontSize: 18),
+                          ),
                 ),
               ),
             ],
