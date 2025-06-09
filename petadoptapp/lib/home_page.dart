@@ -1,3 +1,9 @@
+// Strona główna aplikacji, wyświetla listę zwierząt do adopcji i obsługuje nawigację.
+// Umożliwia przeglądanie, filtrowanie oraz dodawanie zwierząt przez użytkowników.
+// Obsługuje także ulubione oraz wiadomości między użytkownikami.
+
+// ignore_for_file: use_build_context_synchronously, deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'settings_page.dart';
@@ -10,9 +16,15 @@ import 'dart:math';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'main.dart' show getApiBaseUrl;
 
+/// Główna strona aplikacji z listą zwierząt i nawigacją.
 class HomePage extends StatefulWidget {
+  /// Funkcja do ustawiania trybu ciemnego
   final void Function(bool)? setDarkMode;
+
+  /// Czy tryb ciemny jest aktywny
   final bool darkMode;
+
+  /// Email aktualnie zalogowanego użytkownika
   final String? currentUserEmail;
   const HomePage({
     super.key,
@@ -25,13 +37,18 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
+/// Stan strony HomePage, obsługuje logikę, filtry, gesty i UI.
 class _HomePageState extends State<HomePage> {
+  // Kontroler do przewijania stron
   final PageController _pageController = PageController();
+  // Lista ulubionych ogłoszeń
   final List<String> _favorites = [];
+  // Filtry
   String? _filterType;
   String? _filterBreed;
   RangeValues? _filterAgeRange;
   List<String> _filterWojewodztwa = [];
+  // Lista wszystkich województw
   final List<String> _allWojewodztwa = [
     'dolnośląskie',
     'kujawsko-pomorskie',
@@ -51,25 +68,27 @@ class _HomePageState extends State<HomePage> {
     'zachodniopomorskie',
   ];
 
-  // Zmienne do obsługi gestów
+  // Zmienne do obsługi gestów przesuwania kart
   Offset? _dragStart;
   Offset _dragPosition = Offset.zero;
   double _angle = 0;
   Size _screenSize = Size.zero;
+  // Lista zwierząt pobrana z API
   List<Map<String, dynamic>> _animals = [];
-
-  // For like/dislike overlay
-  String? _swipeDirection; // 'left' or 'right' or null
+  // Kierunek przesunięcia (like/dislike)
+  String? _swipeDirection;
 
   @override
   void initState() {
     super.initState();
+    // Pobierz rozmiar ekranu i dane zwierząt po załadowaniu widżetu
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _screenSize = MediaQuery.of(context).size;
       _fetchAnimals(context);
     });
   }
 
+  /// Pobiera listę zwierząt z API
   Future<void> _fetchAnimals(BuildContext context) async {
     try {
       final response = await http.get(Uri.parse('${getApiBaseUrl()}/animals'));
@@ -117,10 +136,12 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
+  /// Obsługa rozpoczęcia gestu przesuwania karty
   void _onPanStart(DragStartDetails details) {
     _dragStart = details.globalPosition;
   }
 
+  /// Obsługa aktualizacji gestu przesuwania karty
   void _onPanUpdate(DragUpdateDetails details) {
     if (_dragStart == null) return;
 
@@ -130,7 +151,7 @@ class _HomePageState extends State<HomePage> {
       newPosition.dy - _dragStart!.dy,
     );
 
-    // Zmniejsz czułość kąta, aby przesuwanie było bardziej naturalne
+    // Poprawa przesuwania karty
     final angle = _dragPosition.dx / (_screenSize.width * 1.2) * 0.5;
     setState(() {
       _angle = angle;
@@ -144,9 +165,10 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  /// Obsługa zakończenia gestu przesuwania karty
   void _onPanEnd(DragEndDetails details) {
     final dragVector = _dragPosition;
-    // Zmniejsz próg przesunięcia, aby swipe był bardziej responsywny
+    // Poprawa responsywności przesuwania
     final isDraggedFarEnough = dragVector.dx.abs() > _screenSize.width * 0.25;
 
     if (isDraggedFarEnough) {
@@ -161,7 +183,6 @@ class _HomePageState extends State<HomePage> {
           _animals.add(rejectedAnimal);
         }
 
-        // Trigger UI update
         _animals = List.from(_animals);
       });
     }
@@ -174,6 +195,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  /// Pokazuje szczegóły zwierzaka w dolnym panelu
   void showAnimalDetails(
     BuildContext context,
     Map<String, dynamic> animal, {
@@ -284,29 +306,69 @@ class _HomePageState extends State<HomePage> {
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         ElevatedButton.icon(
-                          onPressed: () {
+                          onPressed: () async {
                             if (animal['owner_email'] != null &&
-                                animal['owner_email'] != '') {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder:
-                                      (context) => MessagesPage(
-                                        currentUserEmail: currentUserEmail,
-                                        chatWithEmail: animal['owner_email'],
-                                        animalId:
-                                            animal['id'] is int
-                                                ? animal['id']
-                                                : int.tryParse(
-                                                  animal['id'].toString(),
-                                                ),
+                                animal['owner_email'] != '' &&
+                                widget.currentUserEmail != null &&
+                                widget.currentUserEmail !=
+                                    animal['owner_email']) {
+                              // Fetch or create conversation
+                              final response = await http.post(
+                                Uri.parse('${getApiBaseUrl()}/conversations'),
+                                headers: {'Content-Type': 'application/json'},
+                                body: jsonEncode({
+                                  'user1_email': widget.currentUserEmail,
+                                  'user2_email': animal['owner_email'],
+                                  'zwierze_id': animal['id'],
+                                }),
+                              );
+                              if (response.statusCode == 200) {
+                                final data = jsonDecode(response.body);
+                                final conversationId =
+                                    data['conversation_id'] ?? data['id'];
+                                if (conversationId != null) {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder:
+                                          (context) => MessagesPage(
+                                            currentUserEmail:
+                                                widget.currentUserEmail,
+                                            conversationId: conversationId,
+                                          ),
+                                    ),
+                                  );
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Nie udało się rozpocząć rozmowy.',
                                       ),
+                                    ),
+                                  );
+                                }
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Błąd połączenia z serwerem.',
+                                    ),
+                                  ),
+                                );
+                              }
+                            } else if (widget.currentUserEmail ==
+                                animal['owner_email']) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Nie możesz napisać do siebie.',
+                                  ),
                                 ),
                               );
                             } else {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
+                                const SnackBar(
                                   content: Text(
-                                    'Brak adresu e-mail właściciela ogłoszenia.',
+                                    'Brak adresu e-mail właściciela ogłoszenia lub jesteś niezalogowany.',
                                   ),
                                 ),
                               );
@@ -441,6 +503,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Buduje kartę zwierzaka, obsługuje gesty dla górnej karty
   Widget _buildAnimalCard(Map<String, dynamic> animal, {bool isTop = false}) {
     if (isTop) {
       return GestureDetector(
@@ -476,7 +539,7 @@ class _HomePageState extends State<HomePage> {
                           decoration: BoxDecoration(
                             border: Border.all(color: Colors.green, width: 5),
                             borderRadius: BorderRadius.circular(12),
-                            color: Colors.transparent, // przezroczyste tło
+                            color: Colors.transparent,
                           ),
                           child: Text(
                             'LIKE',
@@ -511,7 +574,7 @@ class _HomePageState extends State<HomePage> {
                           decoration: BoxDecoration(
                             border: Border.all(color: Colors.red, width: 5),
                             borderRadius: BorderRadius.circular(12),
-                            color: Colors.transparent, // przezroczyste tło
+                            color: Colors.transparent,
                           ),
                           child: Text(
                             'NOPE',
@@ -540,6 +603,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// Zawartość karty zwierzaka (UI)
   Widget _animalCardContent(Map<String, dynamic> animal) {
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
@@ -649,6 +713,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Zwraca listę zwierząt po zastosowaniu filtrów
   List<Map<String, dynamic>> _filteredAnimals() {
     return _animals.where((animal) {
       // Typ zwierzęcia
@@ -686,6 +751,7 @@ class _HomePageState extends State<HomePage> {
     }).toList();
   }
 
+  /// Buduje główny widok strony
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -889,7 +955,6 @@ class _HomePageState extends State<HomePage> {
                                   _filterType = selectedType;
                                   _filterBreed = breed;
                                   _filterAgeRange = ageRange;
-                                  // _filterWojewodztwa is already updated by FilterChips
                                   _dragPosition = Offset.zero;
                                   _dragStart = null;
                                   _angle = 0;
@@ -915,7 +980,6 @@ class _HomePageState extends State<HomePage> {
           ),
           Stack(
             children: [
-              // Pasek górny bez napisu/logo
               SizedBox(height: 56),
               Align(
                 alignment: Alignment.topRight,
@@ -992,7 +1056,10 @@ class _HomePageState extends State<HomePage> {
                 onPressed: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (context) => const MessagesPage(),
+                      builder:
+                          (context) => MessagesPage(
+                            currentUserEmail: widget.currentUserEmail,
+                          ),
                     ),
                   );
                 },

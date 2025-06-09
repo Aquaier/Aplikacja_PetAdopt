@@ -1,3 +1,5 @@
+// Strona dodawania nowego ogłoszenia o zwierzęciu.
+
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'dart:async';
@@ -6,7 +8,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'main.dart' show getApiBaseUrl;
 
+/// Główna strona do dodawania nowego zwierzaka
 class AddAnimalPage extends StatefulWidget {
+  /// Email aktualnie zalogowanego użytkownika
   final String? currentUserEmail;
   const AddAnimalPage({super.key, this.currentUserEmail});
 
@@ -14,12 +18,18 @@ class AddAnimalPage extends StatefulWidget {
   State<AddAnimalPage> createState() => _AddAnimalPageState();
 }
 
+/// Stan strony AddAnimalPage, obsługuje formularz i logikę dodawania
 class _AddAnimalPageState extends State<AddAnimalPage> {
+  // Klucz formularza
   final _formKey = GlobalKey<FormState>();
+  // Pola formularza
   String? _title, _species, _breed, _desc, _weight, _age;
+  // Wybrane zdjęcie
   XFile? _imageFile;
+  // Czy trwa ładowanie (wysyłanie)
   bool _isLoading = false;
 
+  /// Otwiera galerię i pozwala wybrać zdjęcie zwierzaka.
   Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
@@ -30,11 +40,13 @@ class _AddAnimalPageState extends State<AddAnimalPage> {
     }
   }
 
+  /// Wysyła formularz i dodaje nowe ogłoszenie do bazy
   void _submit() async {
     if (!_formKey.currentState!.validate() || _imageFile == null) return;
     _formKey.currentState!.save();
     setState(() => _isLoading = true);
     try {
+      // Przygotowanie żądania multipart
       var uri = Uri.parse('${getApiBaseUrl()}/animals');
       var request = http.MultipartRequest('POST', uri);
       request.fields['tytul'] = _title ?? '';
@@ -45,9 +57,11 @@ class _AddAnimalPageState extends State<AddAnimalPage> {
       request.fields['opis'] = _desc ?? '';
       request.fields['owner_email'] = widget.currentUserEmail ?? '';
       request.fields['imie'] = '';
+      // Dodanie pliku zdjęcia do żądania
       request.files.add(
         await http.MultipartFile.fromPath('zdjecie', _imageFile!.path),
       );
+      // Wysłanie żądania i obsługa odpowiedzi
       var response = await request.send().timeout(
         const Duration(seconds: 10),
         onTimeout: () {
@@ -89,6 +103,7 @@ class _AddAnimalPageState extends State<AddAnimalPage> {
     }
   }
 
+  /// Buduje widok strony dodawania ogłoszenia.
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -104,6 +119,7 @@ class _AddAnimalPageState extends State<AddAnimalPage> {
           key: _formKey,
           child: ListView(
             children: [
+              // Pole do wyboru zdjęcia
               GestureDetector(
                 onTap: _pickImage,
                 child:
@@ -122,6 +138,7 @@ class _AddAnimalPageState extends State<AddAnimalPage> {
                         ),
               ),
               const SizedBox(height: 16),
+              // Pole tytułu ogłoszenia
               TextFormField(
                 decoration: const InputDecoration(
                   labelText: 'Tytuł ogłoszenia',
@@ -130,6 +147,7 @@ class _AddAnimalPageState extends State<AddAnimalPage> {
                 onSaved: (v) => _title = v,
               ),
               const SizedBox(height: 12),
+              // Pole gatunku
               TextFormField(
                 decoration: const InputDecoration(
                   labelText: 'Gatunek (pies/kot)',
@@ -139,29 +157,34 @@ class _AddAnimalPageState extends State<AddAnimalPage> {
                 onSaved: (v) => _species = v,
               ),
               const SizedBox(height: 12),
+              // Pole rasy
               TextFormField(
                 decoration: const InputDecoration(labelText: 'Rasa'),
                 onSaved: (v) => _breed = v,
               ),
               const SizedBox(height: 12),
+              // Pole wieku
               TextFormField(
                 decoration: const InputDecoration(labelText: 'Wiek'),
                 keyboardType: TextInputType.number,
                 onSaved: (v) => _age = v,
               ),
               const SizedBox(height: 12),
+              // Pole wagi
               TextFormField(
                 decoration: const InputDecoration(labelText: 'Waga'),
                 keyboardType: TextInputType.number,
                 onSaved: (v) => _weight = v,
               ),
               const SizedBox(height: 12),
+              // Pole opisu
               TextFormField(
                 decoration: const InputDecoration(labelText: 'Opis'),
                 maxLines: 3,
                 onSaved: (v) => _desc = v,
               ),
               const SizedBox(height: 24),
+              // Przycisk dodawania
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(

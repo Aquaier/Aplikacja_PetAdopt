@@ -11,10 +11,12 @@ import random
 import string
 import os
 
+# Inicjalizacja aplikacji Flask
 app = Flask(__name__)
 CORS(app)
 app.secret_key = 'super_secret_key'  
 
+# Funkcja pomocnicza do połączenia z bazą danych MySQL
 def get_db_connection():
     return mysql.connector.connect(
         host='localhost',
@@ -23,15 +25,16 @@ def get_db_connection():
         database='petadopt'
     )
 
+# Strona główna API
 @app.route('/')
 def home():
     return jsonify({'message': 'Welcome to the PetAdopt API!'})
 
-# Funkcja pomocnicza do haszowania hasła
+# Funkcja do haszowania hasła
 def hash_password(password):
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
-# Funkcja pomocnicza do sprawdzania hasła
+# Funkcja do sprawdzania hasła
 def check_password(password, hashed):
     return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
@@ -51,11 +54,13 @@ def is_strong_password(password):
         return False
     return True
 
+# Funkcja do generowania losowego hasła
 def generate_random_password(length=10):
     chars = string.ascii_letters + string.digits
     return ''.join(random.choice(chars) for _ in range(length))
 
 
+# Funkcja do wysyłania maila z nowym hasłem
 def send_reset_email(recipient_email, new_password):
     smtp_servers = [
         {
@@ -84,6 +89,7 @@ def send_reset_email(recipient_email, new_password):
             continue
     return False
 
+# Endpoint logowania użytkownika
 @app.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -111,6 +117,7 @@ def login():
     return jsonify({'success': True, 'user': {'id': user['id'], 'email': user['email'], 'czy_schronisko': user['czy_schronisko']}})
 
 
+# Endpoint rejestracji użytkownika
 @app.route('/register', methods=['POST'])
 def register():
     data = request.get_json()
@@ -134,11 +141,13 @@ def register():
     conn.close()
     return jsonify({'success': True})
 
+# Endpoint wylogowania użytkownika
 @app.route('/logout', methods=['POST'])
 def logout():
     session.clear()
     return jsonify({'success': True, 'message': 'Wylogowano'})
 
+# Endpoint testowy połączenia z bazą danych
 @app.route('/test-db', methods=['GET'])
 def test_db():
     try:
@@ -152,6 +161,7 @@ def test_db():
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
+# Endpoint resetu hasła
 @app.route('/forgot-password', methods=['POST'])
 def forgot_password():
     data = request.get_json()
@@ -177,6 +187,7 @@ def forgot_password():
     else:
         return jsonify({'success': False, 'message': 'Nie udało się wysłać e-maila. Skontaktuj się z administratorem.'}), 500
 
+# Endpoint pobierania listy zwierząt
 @app.route('/animals', methods=['GET'])
 def get_animals():
     conn = get_db_connection()
@@ -201,6 +212,7 @@ def get_animals():
             animal['zdjecie_url'] = f'{request.host_url}images/{filename}'
     return jsonify({'success': True, 'animals': animals})
 
+# Endpoint dodawania nowego zwierzaka
 @app.route('/animals', methods=['POST'])
 def add_animal():
     print('--- [DEBUG] add_animal wywołane ---')
@@ -224,7 +236,6 @@ def add_animal():
         image.save(filepath)
         zdjecie_url = f"{request.host_url}images/{filename}"
         print(f'--- [DEBUG] Zdjęcie zapisane: {filepath}')
-    # Utwórz jedno połączenie dla całej operacji
     conn = get_db_connection()
     try:
         # Pobierz uzytkownik_id na podstawie emaila
@@ -251,14 +262,15 @@ def add_animal():
     print('--- [DEBUG] Zwierzak dodany do bazy ---')
     return jsonify({'success': True, 'message': 'Zwierzak dodany!'})
 
+# Endpoint serwowania zdjęć zwierząt
 @app.route('/images/<filename>')
 def serve_image(filename):
     images_dir = os.path.join(os.path.dirname(__file__), 'images')
     response = send_from_directory(images_dir, filename)
-    # Dodaj nagłówek CORS dla obrazów
     response.headers['Access-Control-Allow-Origin'] = '*'
     return response
 
+# Endpoint pobierania numeru telefonu właściciela ogłoszenia
 @app.route('/user-phone')
 def get_user_phone():
     email = request.args.get('email')
@@ -290,6 +302,7 @@ def get_user_phone():
         return jsonify({'success': True, 'phone': prywatny['telefon']})
     return jsonify({'success': False, 'message': 'Nie znaleziono numeru telefonu.'}), 404
 
+# Endpoint pobierania listy rozmów użytkownika
 @app.route('/conversations', methods=['GET'])
 def get_conversations():
     email = request.args.get('user_email')
@@ -308,7 +321,7 @@ def get_conversations():
     cursor.execute('SELECT id FROM zwierzeta WHERE uzytkownik_id=%s', (user_id,))
     animals = cursor.fetchall()
     animal_ids = [a['id'] for a in animals]
-    # Pobierz rozmowy, w których użytkownik jest stroną (jako uzytkownik1_id/uzytkownik2_id) LUB jest właścicielem zwierzęcia
+    # Pobierz rozmowy, w których użytkownik jest stroną (jako uzytkownik1_id/uzytkownik2_id) lub jest właścicielem zwierzęcia
     if animal_ids:
         format_strings = ','.join(['%s'] * len(animal_ids))
         cursor.execute(f'''
@@ -327,22 +340,35 @@ def get_conversations():
             WHERE r.uzytkownik1_id = %s OR r.uzytkownik2_id = %s
         ''', (user_id, user_id))
     conversations = cursor.fetchall()
+    # Dodaj ostatnią wiadomość do każdej rozmowy oraz tytuł ogłoszenia
+    for c in conversations:
+        cursor.execute('''SELECT tresc, czas_wyslania FROM wiadomosci WHERE rozmowa_id=%s ORDER BY czas_wyslania DESC LIMIT 1''', (c['id'],))
+        last_msg = cursor.fetchone()
+        if last_msg:
+            c['last_message'] = last_msg['tresc']
+            c['last_message_time'] = last_msg['czas_wyslania']
+        else:
+            c['last_message'] = ''
+            c['last_message_time'] = None
+        # Pobierz tytuł ogłoszenia
+        cursor.execute('SELECT tytul FROM zwierzeta WHERE id=%s', (c['zwierze_id'],))
+        animal = cursor.fetchone()
+        c['tytul'] = animal['tytul'] if animal else ''
     cursor.close()
     conn.close()
     # Zwróć listę rozmówców (email) i id rozmowy
     result = []
     for c in conversations:
-        # Jeśli użytkownik jest właścicielem ogłoszenia, pokaż rozmówcę jako drugą stronę
         if c['user1_email'] == email:
             other_email = c['user2_email']
         elif c['user2_email'] == email:
             other_email = c['user1_email']
         else:
-            # Właściciel ogłoszenia, nie jest stroną rozmowy, pokaż obie strony
             other_email = f"{c['user1_email']} / {c['user2_email']}"
-        result.append({'conversation_id': c['id'], 'with': other_email, 'zwierze_id': c['zwierze_id']})
+        result.append({'conversation_id': c['id'], 'with': other_email, 'zwierze_id': c['zwierze_id'], 'tytul': c['tytul'], 'last_message': c['last_message'], 'last_message_time': c['last_message_time']})
     return jsonify({'success': True, 'conversations': result})
 
+# Endpoint pobierania wiadomości z rozmowy
 @app.route('/messages', methods=['GET'])
 def get_messages():
     conversation_id = request.args.get('conversation_id')
@@ -362,46 +388,32 @@ def get_messages():
     conn.close()
     return jsonify({'success': True, 'messages': messages})
 
+# Endpoint wysyłania wiadomości
 @app.route('/messages', methods=['POST'])
 def send_message():
     data = request.get_json()
+    conversation_id = data.get('conversation_id')
     sender_email = data.get('sender_email')
-    receiver_email = data.get('receiver_email')
     text = data.get('text')
-    zwierze_id = data.get('zwierze_id')
-    if not sender_email or not receiver_email or not text or not zwierze_id:
-        return jsonify({'success': False, 'message': 'Brak wymaganych danych (w tym zwierze_id).'}), 400
+    if not conversation_id or not sender_email or not text:
+        return jsonify({'success': False, 'message': 'Brak wymaganych danych.'}), 400
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    # Pobierz id nadawcy i odbiorcy
+    # Pobierz id nadawcy
     cursor.execute('SELECT id FROM uzytkownicy WHERE email=%s', (sender_email,))
     sender = cursor.fetchone()
-    cursor.execute('SELECT id FROM uzytkownicy WHERE email=%s', (receiver_email,))
-    receiver = cursor.fetchone()
-    if not sender or not receiver:
+    if not sender:
         cursor.close()
         conn.close()
         return jsonify({'success': False, 'message': 'Nie znaleziono użytkownika.'}), 404
     sender_id = sender['id']
-    receiver_id = receiver['id']
-    # Sprawdź czy zwierze_id istnieje
-    cursor.execute('SELECT id FROM zwierzeta WHERE id=%s', (zwierze_id,))
-    animal = cursor.fetchone()
-    if not animal:
-        cursor.close()
-        conn.close()
-        return jsonify({'success': False, 'message': 'Nie znaleziono ogłoszenia (zwierze_id).'}), 404
-    # Znajdź lub utwórz rozmowę
-    cursor.execute('''SELECT id FROM rozmowy WHERE ((uzytkownik1_id=%s AND uzytkownik2_id=%s) OR (uzytkownik1_id=%s AND uzytkownik2_id=%s)) AND zwierze_id=%s''',
-        (sender_id, receiver_id, receiver_id, sender_id, zwierze_id))
+    # Sprawdź czy rozmowa istnieje
+    cursor.execute('SELECT id FROM rozmowy WHERE id=%s', (conversation_id,))
     conversation = cursor.fetchone()
     if not conversation:
-        cursor.execute('INSERT INTO rozmowy (zwierze_id, uzytkownik1_id, uzytkownik2_id) VALUES (%s, %s, %s)',
-            (zwierze_id, sender_id, receiver_id))
-        conn.commit()
-        conversation_id = cursor.lastrowid
-    else:
-        conversation_id = conversation['id']
+        cursor.close()
+        conn.close()
+        return jsonify({'success': False, 'message': 'Nie znaleziono rozmowy.'}), 404
     # Dodaj wiadomość
     cursor.execute('INSERT INTO wiadomosci (rozmowa_id, nadawca_id, tresc) VALUES (%s, %s, %s)',
         (conversation_id, sender_id, text))
@@ -410,6 +422,7 @@ def send_message():
     conn.close()
     return jsonify({'success': True, 'conversation_id': conversation_id})
     
+# Endpoint usuwania ogłoszenia o zwierzaku
 @app.route('/animals/<int:animal_id>', methods=['DELETE'])
 def delete_animal(animal_id):
     owner_email = request.args.get('owner_email')
@@ -450,6 +463,7 @@ def delete_animal(animal_id):
     conn.close()
     return jsonify({'success': True, 'message': 'Ogłoszenie usunięte.'})
 
+# Endpoint edycji ogłoszenia o zwierzaku
 @app.route('/animals/<int:animal_id>', methods=['PUT'])
 def update_animal(animal_id):
     owner_email = request.form.get('owner_email')
@@ -508,6 +522,69 @@ def update_animal(animal_id):
     conn.close()
     return jsonify({'success': True, 'message': 'Ogłoszenie zaktualizowane!'})
     
+# Endpoint tworzenia lub pobierania rozmowy
+@app.route('/conversations', methods=['POST'])
+def create_or_get_conversation():
+    data = request.get_json()
+    user1_email = data.get('user1_email')
+    user2_email = data.get('user2_email')
+    zwierze_id = data.get('zwierze_id')
+    if not user1_email or not user2_email or not zwierze_id:
+        return jsonify({'success': False, 'message': 'Brak wymaganych danych.'}), 400
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    # Pobierz id użytkowników
+    cursor.execute('SELECT id FROM uzytkownicy WHERE email=%s', (user1_email,))
+    user1 = cursor.fetchone()
+    cursor.execute('SELECT id FROM uzytkownicy WHERE email=%s', (user2_email,))
+    user2 = cursor.fetchone()
+    if not user1 or not user2:
+        cursor.close()
+        conn.close()
+        return jsonify({'success': False, 'message': 'Nie znaleziono użytkownika.'}), 404
+    user1_id = user1['id']
+    user2_id = user2['id']
+    # Sprawdź czy rozmowa już istnieje
+    cursor.execute('''SELECT id FROM rozmowy WHERE ((uzytkownik1_id=%s AND uzytkownik2_id=%s) OR (uzytkownik1_id=%s AND uzytkownik2_id=%s)) AND zwierze_id=%s''',
+        (user1_id, user2_id, user2_id, user1_id, zwierze_id))
+    conversation = cursor.fetchone()
+    if conversation:
+        conversation_id = conversation['id']
+    else:
+        cursor.execute('INSERT INTO rozmowy (zwierze_id, uzytkownik1_id, uzytkownik2_id) VALUES (%s, %s, %s)',
+            (zwierze_id, user1_id, user2_id))
+        conn.commit()
+        conversation_id = cursor.lastrowid
+    cursor.close()
+    conn.close()
+    return jsonify({'success': True, 'conversation_id': conversation_id})
+    
+# Endpoint usuwania użytkownika i jego ogłoszeń
+@app.route('/delete-user', methods=['DELETE'])
+def delete_user():
+    email = request.args.get('email')
+    if not email:
+        return jsonify({'success': False, 'message': 'Brak adresu e-mail.'}), 400
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    # Pobierz id użytkownika
+    cursor.execute('SELECT id FROM uzytkownicy WHERE email=%s', (email,))
+    user = cursor.fetchone()
+    if not user:
+        cursor.close()
+        conn.close()
+        return jsonify({'success': False, 'message': 'Nie znaleziono użytkownika.'}), 404
+    user_id = user['id']
+    # Usuń wszystkie zwierzęta użytkownika
+    cursor.execute('DELETE FROM zwierzeta WHERE uzytkownik_id=%s', (user_id,))
+    # Usuń użytkownika
+    cursor.execute('DELETE FROM uzytkownicy WHERE id=%s', (user_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({'success': True, 'message': 'Konto i ogłoszenia zostały usunięte.'})
+
+# Uruchomienie aplikacji Flask
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000, debug=True)
 

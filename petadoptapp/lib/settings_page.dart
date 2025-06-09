@@ -1,11 +1,22 @@
+// Strona ustawień aplikacji (Ustawienia konta, motyw, powiadomienia, wylogowanie, usuwanie konta)
+// ignore_for_file: prefer_interpolation_to_compose_strings, use_build_context_synchronously
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'main.dart' show getApiBaseUrl;
 import 'messages_page.dart';
 import 'favorites_page.dart';
 import 'my_listings_page.dart';
 
+/// Strona ustawień aplikacji.
 class SettingsPage extends StatefulWidget {
+  /// Funkcja do ustawiania trybu ciemnego
   final void Function(bool)? setDarkMode;
+
+  /// Czy tryb ciemny jest aktywny
   final bool darkMode;
+
+  /// Email aktualnie zalogowanego użytkownika
   final String? currentUserEmail;
   const SettingsPage({
     super.key,
@@ -18,8 +29,11 @@ class SettingsPage extends StatefulWidget {
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
+/// Stan strony SettingsPage, obsługuje ustawienia konta, motyw, powiadomienia i akcje użytkownika.
 class _SettingsPageState extends State<SettingsPage> {
+  // Czy powiadomienia są włączone
   bool notificationsEnabled = true;
+  // Czy tryb ciemny jest aktywny
   late bool darkMode;
 
   @override
@@ -28,6 +42,7 @@ class _SettingsPageState extends State<SettingsPage> {
     darkMode = widget.darkMode;
   }
 
+  /// Buduje widok strony ustawień
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -42,11 +57,11 @@ class _SettingsPageState extends State<SettingsPage> {
           style: TextStyle(
             color: darkMode ? Colors.white : Colors.black,
             fontWeight: FontWeight.bold,
-            fontSize: 32, // dopasowana do reszty
-            fontFamily: 'Poppins', // spójna czcionka
+            fontSize: 32,
+            fontFamily: 'Poppins',
           ),
         ),
-        centerTitle: true, // wyśrodkowanie
+        centerTitle: true,
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -162,7 +177,72 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ),
                 TextButton(
-                  onPressed: () {},
+                  onPressed: () async {
+                    int confirmCount = 0;
+                    final messages = [
+                      'Czy na pewno chcesz usunąć konto? 😢',
+                      'Jesteś pewien, że chcesz usunąć swoje konto? 😢😢',
+                      'To będzie nieodwracalne... Czy na pewno? 😢😢😢',
+                      'Naprawdę chcesz odejść? Prosimy, przemyśl to... 😢😢😢😢',
+                      'Ostatnia szansa! Usunąć konto? 😭😭😭😭😭',
+                    ];
+                    bool confirmed = false;
+                    while (confirmCount < 5) {
+                      confirmed =
+                          await showDialog<bool>(
+                            context: context,
+                            builder:
+                                (context) => AlertDialog(
+                                  title: Text('Potwierdzenie'),
+                                  content: Text(messages[confirmCount]),
+                                  actions: [
+                                    TextButton(
+                                      onPressed:
+                                          () =>
+                                              Navigator.of(context).pop(false),
+                                      child: Text('Anuluj'),
+                                    ),
+                                    TextButton(
+                                      onPressed:
+                                          () => Navigator.of(context).pop(true),
+                                      child: Text('Tak'),
+                                    ),
+                                  ],
+                                ),
+                          ) ??
+                          false;
+                      if (!confirmed) break;
+                      confirmCount++;
+                    }
+                    if (confirmed && confirmCount == 5) {
+                      final email = widget.currentUserEmail;
+                      if (email != null) {
+                        final response = await http.delete(
+                          Uri.parse(
+                            getApiBaseUrl() +
+                                '/delete-user?email=' +
+                                Uri.encodeComponent(email),
+                          ),
+                        );
+                        if (response.statusCode == 200) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Konto i ogłoszenia zostały usunięte.',
+                              ),
+                            ),
+                          );
+                          Navigator.of(
+                            context,
+                          ).pushNamedAndRemoveUntil('/', (route) => false);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Błąd usuwania konta.')),
+                          );
+                        }
+                      }
+                    }
+                  },
                   child: Text(
                     'Usuń konto',
                     style: TextStyle(
@@ -177,9 +257,7 @@ class _SettingsPageState extends State<SettingsPage> {
           const Spacer(),
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
-            child: Column(
-              children: [
-                // Usunięto ikony Facebooka i aparatu
+            child: Column(children: [
               ],
             ),
           ),
@@ -208,7 +286,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 onPressed: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (context) => const MessagesPage(),
+                      builder:
+                          (context) => MessagesPage(
+                            currentUserEmail: widget.currentUserEmail,
+                          ),
                     ),
                   );
                 },
@@ -218,10 +299,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 onPressed: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder:
-                          (context) => FavoritesPage(
-                            favorites: const [],
-                          ), // Placeholder, bo lista polubionych jest w HomePage
+                      builder: (context) => FavoritesPage(favorites: const []),
                     ),
                   );
                 },

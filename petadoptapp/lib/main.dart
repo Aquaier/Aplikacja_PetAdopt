@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'home_page.dart';
 import 'messages_page.dart';
@@ -6,10 +8,12 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'dart:io';
 
+/// Główna funkcja uruchamiająca aplikację.
 void main() {
   runApp(const MyApp());
 }
 
+/// Główna klasa aplikacji.
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
@@ -17,16 +21,21 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
+/// Stan aplikacji, obsługuje tryb ciemny i logikę logowania.
 class _MyAppState extends State<MyApp> {
+  // Czy tryb ciemny jest aktywny
   bool darkMode = false;
+  // Email aktualnie zalogowanego użytkownika
   String? _loggedInEmail;
 
+  /// Ustawia tryb ciemny aplikacji.
   void setDarkMode(bool value) {
     setState(() {
       darkMode = value;
     });
   }
 
+  /// Buduje główny widget MaterialApp z routingiem i motywami.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -84,7 +93,7 @@ class _MyAppState extends State<MyApp> {
               currentUserEmail: _loggedInEmail,
             ),
         '/messages': (context) {
-          // Always get latest _loggedInEmail from app state
+          // Zawsze pobieraj najnowszy _loggedInEmail ze stanu aplikacji
           return MessagesPage(currentUserEmail: _loggedInEmail);
         },
         '/favorites': (context) => const FavoritesPage(favorites: []),
@@ -93,6 +102,7 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
+/// Strona logowania i rejestracji użytkownika.
 class LoginPage extends StatefulWidget {
   final void Function(bool)? setDarkMode;
   final bool darkMode;
@@ -108,7 +118,9 @@ class LoginPage extends StatefulWidget {
   State<LoginPage> createState() => _LoginPageState();
 }
 
+/// Stan strony logowania/rejestracji, obsługuje formularze i logikę autoryzacji.
 class _LoginPageState extends State<LoginPage> {
+  // Kontrolery do obsługi pól tekstowych formularzy.
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _registerEmailController =
@@ -116,6 +128,7 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _registerPasswordController =
       TextEditingController();
 
+  // Zmienne stanu formularzy
   bool _isPasswordVisible = false;
   bool _isLoading = false;
   String? _emailError;
@@ -131,6 +144,7 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  /// Loguje użytkownika do aplikacji
   Future<void> _login() async {
     setState(() {
       _emailError = null;
@@ -157,7 +171,7 @@ class _LoginPageState extends State<LoginPage> {
     });
     try {
       final response = await http.post(
-        Uri.parse(getApiBaseUrl() + '/login'),
+        Uri.parse('${getApiBaseUrl()}/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email, 'password': password}),
       );
@@ -187,6 +201,7 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  /// Rejestruje nowego użytkownika
   Future<void> _register() async {
     setState(() {
       _emailError = null;
@@ -213,7 +228,7 @@ class _LoginPageState extends State<LoginPage> {
     });
     try {
       final response = await http.post(
-        Uri.parse(getApiBaseUrl() + '/register'),
+        Uri.parse('${getApiBaseUrl()}/register'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email, 'password': password}),
       );
@@ -247,6 +262,7 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  /// Resetuje hasło użytkownika
   Future<void> _forgotPassword() async {
     setState(() {
       _emailError = null;
@@ -262,7 +278,7 @@ class _LoginPageState extends State<LoginPage> {
     }
     try {
       final response = await http.post(
-        Uri.parse(getApiBaseUrl() + '/forgot-password'),
+        Uri.parse('${getApiBaseUrl()}/forgot-password'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email}),
       );
@@ -289,6 +305,7 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  /// Buduje widget strony logowania/rejestracji.
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -297,11 +314,10 @@ class _LoginPageState extends State<LoginPage> {
         child: Column(
           children: [
             const SizedBox(height: 24),
-            // Logo
+            // Napis aplikacji
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Usunięto wszystkie obrazki/logo
                 Text(
                   'PetAdopt',
                   style: TextStyle(
@@ -400,6 +416,7 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  /// Buduje formularz logowania.
   Widget _buildLoginForm() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -468,9 +485,7 @@ class _LoginPageState extends State<LoginPage> {
                 _isLoading
                     ? null
                     : () async {
-                      FocusScope.of(
-                        context,
-                      ).unfocus(); // Ukryj klawiaturę przed logowaniem
+                      FocusScope.of(context).unfocus();
                       await _login();
                     },
             style: ElevatedButton.styleFrom(
@@ -518,6 +533,7 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  /// Buduje formularz rejestracji.
   Widget _buildRegisterForm() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -611,15 +627,13 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
+/// Zwraca bazowy adres URL API w zależności od platformy
 String getApiBaseUrl() {
   if (Platform.isAndroid) {
-    // Android emulator uses 10.0.2.2 to access host machine
     return 'http://10.0.2.2:5000';
   } else if (Platform.isIOS) {
-    // iOS simulator uses localhost
     return 'http://localhost:5000';
   } else {
-    // Fallback for desktop/web
     return 'http://localhost:5000';
   }
 }

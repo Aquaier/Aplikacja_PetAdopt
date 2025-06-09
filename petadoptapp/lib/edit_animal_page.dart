@@ -1,3 +1,7 @@
+// Strona edycji ogłoszenia o zwierzęciu.
+
+// ignore_for_file: prefer_interpolation_to_compose_strings, use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
@@ -6,8 +10,12 @@ import 'dart:async';
 
 import 'main.dart' show getApiBaseUrl;
 
+/// Strona umożliwiająca edycję istniejącego ogłoszenia o zwierzęciu.
 class EditAnimalPage extends StatefulWidget {
+  /// Dane ogłoszenia przekazywane do edycji
   final Map<String, dynamic> animal;
+
+  /// Email aktualnie zalogowanego użytkownika
   final String? currentUserEmail;
   const EditAnimalPage({Key? key, required this.animal, this.currentUserEmail})
     : super(key: key);
@@ -16,15 +24,21 @@ class EditAnimalPage extends StatefulWidget {
   State<EditAnimalPage> createState() => _EditAnimalPageState();
 }
 
+/// Stan strony EditAnimalPage, obsługuje formularz, edycję i usuwanie ogłoszenia.
 class _EditAnimalPageState extends State<EditAnimalPage> {
+  // Klucz formularza
   final _formKey = GlobalKey<FormState>();
+  // Pola formularza
   late String _title, _species, _breed, _desc, _weight, _age;
+  // Wybrane zdjęcie (jeśli zmieniono)
   XFile? _imageFile;
+  // Czy trwa ładowanie (edycja/usuwanie)
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
+    // Inicjalizacja pól formularza danymi ogłoszenia
     _title = widget.animal['tytul'] ?? '';
     _species = widget.animal['gatunek'] ?? '';
     _breed = widget.animal['rasa'] ?? '';
@@ -33,6 +47,7 @@ class _EditAnimalPageState extends State<EditAnimalPage> {
     _age = widget.animal['wiek']?.toString() ?? '';
   }
 
+  /// Otwiera galerię i pozwala wybrać nowe zdjęcie zwierzaka.
   Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
@@ -43,6 +58,7 @@ class _EditAnimalPageState extends State<EditAnimalPage> {
     }
   }
 
+  /// Usuwa ogłoszenie o zwierzaku
   void _deleteAnimal() async {
     setState(() => _isLoading = true);
     try {
@@ -76,6 +92,7 @@ class _EditAnimalPageState extends State<EditAnimalPage> {
     }
   }
 
+  /// Buduje widok strony edycji ogłoszenia.
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -85,6 +102,7 @@ class _EditAnimalPageState extends State<EditAnimalPage> {
         backgroundColor: isDark ? Colors.grey[900] : Colors.white,
         iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
         actions: [
+          // Przycisk usuwania ogłoszenia
           IconButton(
             icon: const Icon(Icons.delete, color: Colors.red),
             onPressed: _isLoading ? null : _deleteAnimal,
@@ -97,6 +115,7 @@ class _EditAnimalPageState extends State<EditAnimalPage> {
           key: _formKey,
           child: ListView(
             children: [
+              // Pole do wyboru/zmiany zdjęcia
               GestureDetector(
                 onTap: _pickImage,
                 child:
@@ -124,6 +143,7 @@ class _EditAnimalPageState extends State<EditAnimalPage> {
                             )),
               ),
               const SizedBox(height: 16),
+              // Pole tytułu ogłoszenia
               TextFormField(
                 initialValue: _title,
                 decoration: const InputDecoration(
@@ -133,6 +153,7 @@ class _EditAnimalPageState extends State<EditAnimalPage> {
                 onSaved: (v) => _title = v ?? '',
               ),
               const SizedBox(height: 12),
+              // Pole gatunku
               TextFormField(
                 initialValue: _species,
                 decoration: const InputDecoration(
@@ -143,12 +164,14 @@ class _EditAnimalPageState extends State<EditAnimalPage> {
                 onSaved: (v) => _species = v ?? '',
               ),
               const SizedBox(height: 12),
+              // Pole rasy
               TextFormField(
                 initialValue: _breed,
                 decoration: const InputDecoration(labelText: 'Rasa'),
                 onSaved: (v) => _breed = v ?? '',
               ),
               const SizedBox(height: 12),
+              // Pole wieku
               TextFormField(
                 initialValue: _age,
                 decoration: const InputDecoration(labelText: 'Wiek'),
@@ -156,6 +179,7 @@ class _EditAnimalPageState extends State<EditAnimalPage> {
                 onSaved: (v) => _age = v ?? '',
               ),
               const SizedBox(height: 12),
+              // Pole wagi
               TextFormField(
                 initialValue: _weight,
                 decoration: const InputDecoration(labelText: 'Waga'),
@@ -163,6 +187,7 @@ class _EditAnimalPageState extends State<EditAnimalPage> {
                 onSaved: (v) => _weight = v ?? '',
               ),
               const SizedBox(height: 12),
+              // Pole opisu
               TextFormField(
                 initialValue: _desc,
                 decoration: const InputDecoration(labelText: 'Opis'),
